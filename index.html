@@ -61,10 +61,10 @@
   </section>
 
   <section id="config-section" style="display:none;">
-    <label>被験者数: <input type="number" id="registration-n" value="100" min="1"></label>
-    <label>施設数: <input type="number" id="site-n" value="10" min="1"></label>
+    <label>被験者数: <input type="text" id="registration-n" value="100" inputmode="numeric" pattern="[0-9]*" class="integer-input"></label>
+    <label>施設数: <input type="text" id="site-n" value="10" inputmode="numeric" pattern="[0-9]*" class="integer-input"></label>
     <label>乱数シード: <input type="text" id="random-seed" value="42"></label>
-    <label>AEレコード数(目安。有効な報告シートを持たない被験者分は除外されるため、実件数は前後します): <input type="number" id="ae-n" value="100" min="0"></label>
+    <label>AEレコード数(目安。有効な報告シートを持たない被験者分は除外されるため、実件数は前後します): <input type="text" id="ae-n" value="100" inputmode="numeric" pattern="[0-9]*" class="integer-input"></label>
     <label>登録開始日: <input type="date" id="registration-start-date" value="2024-04-01"></label>
     <label>MedDRAバージョン: <select id="meddra-version"></select></label>
     <label>WHO Drugバージョン: <select id="who-drug-version"></select></label>
@@ -97,19 +97,19 @@
     <div id="other-domains-preview"></div>
   </section>
 
-  <script src="js/util.js"></script>
-  <script src="js/cdisc_variable_values.js"></script>
-  <script src="js/generation_constraints.js"></script>
-  <script src="js/dm_domain.js"></script>
-  <script src="js/ae_domain.js"></script>
-  <script src="js/ds_domain.js"></script>
-  <script src="js/other_domains.js"></script>
-  <script src="js/orres_realism.js"></script>
-  <script src="data/versions.js"></script>
-  <script src="js/dictionaries.js"></script>
-  <script src="js/dictionary_data_dir.js"></script>
-  <script src="js/meddra_import.js"></script>
-  <script src="js/who_drug_import.js"></script>
-  <script src="js/main.js"></script>
+  <script src="web_tool/js/util.js"></script>
+  <script src="web_tool/js/cdisc_variable_values.js"></script>
+  <script src="web_tool/js/generation_constraints.js"></script>
+  <script src="web_tool/js/dm_domain.js"></script>
+  <script src="web_tool/js/ae_domain.js"></script>
+  <script src="web_tool/js/ds_domain.js"></script>
+  <script src="web_tool/js/other_domains.js"></script>
+  <script src="web_tool/js/orres_realism.js"></script>
+  <script src="web_tool/data/versions.js"></script>
+  <script src="web_tool/js/dictionaries.js"></script>
+  <script src="web_tool/js/dictionary_data_dir.js"></script>
+  <script src="web_tool/js/meddra_import.js"></script>
+  <script src="web_tool/js/who_drug_import.js"></script>
+  <script src="web_tool/js/main.js"></script>
 </body>
 </html>

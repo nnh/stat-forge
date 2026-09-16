@@ -4,12 +4,13 @@ EDC仕様JSON(.json)から、統計解析プログラムの開発・検証用に
 
 ## 構成
 
-- `web_tool/` — ブラウザで動くダミーデータ生成ツール本体
+- `index.html` — ダミーデータ生成ツールの起動ファイル(これをブラウザで開く)
+- `web_tool/` — 上記ツールの実装本体(js/data)
 - `r_version/` — 生成ロジックのR版実装 + 生成データの検証(バリデーション)スクリプト
 
-## web_tool の使い方
+## 使い方
 
-- `web_tool/index.html` をブラウザで開く
+- リポジトリ直下の `index.html` をブラウザで開く
 - EDC仕様JSON(.json)をドラッグ&ドロップ、または選択して読み込む
 - 「生成する」→ドメインごと、またはZIPで一括ダウンロード
 
@@ -42,8 +43,9 @@ EDC仕様JSON(.json)から、統計解析プログラムの開発・検証用に
 ## ディレクトリ構成
 
 ```
+index.html                          # 画面本体(起動ファイル)
+
 web_tool/
-├── index.html                      # 画面本体
 ├── js/
 │   ├── main.js                     # 画面操作の配線(アップロード→設定→生成→ダウンロード)
 │   ├── cdisc_variable_values.js    # EDC仕様JSONからcdisc_variable_values(選択肢展開済み)を組み立て

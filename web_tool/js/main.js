@@ -27,6 +27,20 @@ const configSection = document.getElementById("config-section");
 const resultSection = document.getElementById("result-section");
 const dictionaryStatus = document.getElementById("dictionary-status");
 
+// 被験者数・施設数・AEレコード数(.integer-input)は半角数字のみを受け付ける。
+// type="number"のままだと全角数字がIME確定時に紛れ込むことがある(ブラウザ・IME依存で
+// valueのサニタイズが効かない)ため、type="text"にしてこちらで都度ASCII数字以外を除去する。
+// compositionend(IME確定)側でも同じ処理をしないと、確定直後の全角文字がinputイベントより
+// 前に反映されてすり抜けることがあるため両方に仕掛ける
+function sanitizeIntegerInputValue(el) {
+  const digitsOnly = el.value.replace(/[^0-9]/g, "");
+  if (el.value !== digitsOnly) el.value = digitsOnly;
+}
+document.querySelectorAll(".integer-input").forEach((el) => {
+  el.addEventListener("input", () => sanitizeIntegerInputValue(el));
+  el.addEventListener("compositionend", () => sanitizeIntegerInputValue(el));
+});
+
 // MedDRA/WHO Drugのバージョン選択プルダウンをlabelsの一覧で埋める。
 // 末尾(最新)をデフォルト選択にする
 function populateVersionSelectFromLabels(selectId, labels) {

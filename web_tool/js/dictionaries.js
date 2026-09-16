@@ -32,7 +32,7 @@ async function loadDictionaryVersion(kind, label) {
   if (file) {
     return new Promise((resolve, reject) => {
       const script = document.createElement("script");
-      script.src = `data/${kind}/${file}.js`;
+      script.src = `web_tool/data/${kind}/${file}.js`;
       script.onload = () => resolve();
       script.onerror = () => reject(new Error(`${kind}データの読み込みに失敗しました: ${script.src}`));
       document.head.appendChild(script);
