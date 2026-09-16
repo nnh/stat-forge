@@ -1,8 +1,7 @@
 library(here)
 
-# validate_datasets_test1.Rと同じ処理(check_cm_cmtrt/check_tr_tu_dtc等の特別チェック・
-# run_full_validationの呼び出し方まで含め)を行うが、比較元(生成データ)をR版のその場生成ではなく、
-# Webツールが生成したCSV(dummy_data.zip展開後)に差し替えたもの。
+# check_cm_cmtrt/check_tr_tu_dtc等の特別チェック・run_full_validationの呼び出しを含め、
+# 比較元(生成データ)にWebツールが生成したCSV(dummy_data.zip展開後)を使う。
 #
 # 事前準備: dm_web_csv_path・ae_web_csv_path・ds_web_csv_path・other_domains_web_csv_dir
 # (test_config.R)を、Webツールでfortest1用JSONを読み込んで生成し「ZIPで一括ダウンロード」した
@@ -72,8 +71,8 @@ rm(list = setdiff(ls(), c("ae", "dm", "ds", "other_domains", "facilities", "cdis
 
 source(here("tools/validate_common.R"))
 
-# ここから下はvalidate_datasets_test1.Rと共通の処理(CM/TR特別チェック・run_full_validation
-# 呼び出し・ドメイン名一覧の確認)。validate_test1_shared.Rにまとめてある
+# ここから下の共通処理(CM/TR特別チェック・run_full_validation呼び出し・ドメイン名一覧の確認)は
+# validate_test1_shared.Rにまとめてある
 source(here("tools/validate_test1_shared.R"))
 rm(generated_datasets)
 # 値必須・空欄・日付チェックで繰り返し参照するドメインを短い変数名に控えておく(タイプ量を減らすため)。

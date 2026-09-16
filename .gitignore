@@ -143,6 +143,14 @@ vite.config.ts.timestamp-*
 .vite/
 
 # MedDRA/WHO Drug/IDFの変換済み辞書データ(ライセンスにより再配布不可のため、誤ってコミットしないよう除外)。
-# web_tool/data/versions.js(バージョン一覧のマニフェストのみ)は対象外
-web_tool/data/meddra/
-web_tool/data/who_drug/
+# web_tool/data/versions.js(バージョン一覧のマニフェストのみ)は対象外。
+# フォルダ自体はweb_tool側のフォルダ選択チェック(looksLikeDataDir)に必要なため、
+# 中身だけ除外して.gitkeepでフォルダをgit管理下に残す
+web_tool/data/meddra/*
+web_tool/data/who_drug/*
+!web_tool/data/meddra/.gitkeep
+!web_tool/data/who_drug/.gitkeep
+
+# 個人のローカルパスを書くテスト設定ファイル(test_config.R.sampleをコピーして使う)
+r_version/test_config.R
+.Rproj.user

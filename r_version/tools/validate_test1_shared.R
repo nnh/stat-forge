@@ -1,5 +1,4 @@
-# validate_datasets_test1.R(R版データを比較元にする)とvalidate_datasets_test1_web.R
-# (Webツール生成のCSVを比較元にする)で共通の処理。
+# validate_datasets_test1_web.R(Webツール生成のCSVを比較元にする)で使う共通の処理。
 # 呼び出し元スクリプトが ae/dm/ds/other_domains/cdisc_variable_values/registration_n/json_path/
 # discontinuation_date を用意した上でこのファイルをsourceすること
 
