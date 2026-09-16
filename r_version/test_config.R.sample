@@ -1,0 +1,15 @@
+# テスト・バリデーション(load_edc_spec.R、tools/validate_datasets_test1_web.R等)で
+# 共通して使うEDC仕様JSONファイルのパス。
+# このファイルをコピーして test_config.R として保存し、パスを環境に合わせて書き換えて使う
+# (test_config.R自体はgit管理外)
+json_path <- "/path/to/your/edc_spec.json"
+
+# Webツールの「ZIPで一括ダウンロード」(dummy_data.zip)を展開したディレクトリ。
+# DM_dummy.csv・AE_dummy.csv・DS_dummy.csvに加え、CE_dummy.csv・CM_dummy.csv等の
+# other_domains各ファイルも全てこの1つのフォルダに展開される想定
+other_domains_web_csv_dir <- "/path/to/your/dummy_data_unzipped"
+
+# tools/validate_datasets_test1_web.R等が読み込む、上記フォルダ内のDM/AE/DS各CSVのパス
+dm_web_csv_path <- file.path(other_domains_web_csv_dir, "DM_dummy.csv")
+ae_web_csv_path <- file.path(other_domains_web_csv_dir, "AE_dummy.csv")
+ds_web_csv_path <- file.path(other_domains_web_csv_dir, "DS_dummy.csv")
