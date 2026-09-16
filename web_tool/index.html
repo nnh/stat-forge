@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>FORGE - Dummy Data Generator</title>
+<style>
+  body { font-family: sans-serif; max-width: 900px; margin: 2rem auto; padding: 0 1rem; color: #1e293b; }
+  h1 { font-size: 3rem; font-weight: 900; color: #0284c7; letter-spacing: 0.1em; margin-bottom: 0.5rem; }
+  .app-subtitle { font-size: 0.875rem; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 0.5rem; }
+  .app-version { font-size: 0.75rem; color: #94a3b8; margin: 0 0 1rem; }
+  .app-description { font-size: 0.875rem; color: #64748b; margin: 0 0 1.5rem; }
+  section { margin-bottom: 2rem; }
+  #drop-zone {
+    border: 2px dashed #94a3b8;
+    border-radius: 8px;
+    padding: 2rem;
+    text-align: center;
+    color: #64748b;
+    cursor: pointer;
+  }
+  #drop-zone.drag-over { background-color: #e0f2fe; border-color: #0284c7; }
+  #file-name { font-size: 0.85rem; color: #0284c7; margin-top: 0.5rem; }
+  label { display: block; margin-bottom: 0.75rem; }
+  table { border-collapse: collapse; font-size: 0.85rem; }
+  th, td { border: 1px solid #cbd5e1; padding: 0.3rem 0.6rem; text-align: left; }
+  th { background: #f1f5f9; }
+  button { padding: 0.5rem 1.2rem; border: none; border-radius: 6px; background: #0284c7; color: white; cursor: pointer; }
+  button:hover { background: #0369a1; }
+</style>
+</head>
+<body>
+  <h1>FORGE</h1>
+  <p class="app-subtitle">Fabricated Offline Records Generation Engine</p>
+  <p class="app-version" id="app-version"></p>
+  <p class="app-description">EDC仕様ファイル (.json) を読み込み、SDTM形式のダミーデータを自動生成します。</p>
+  <p style="font-size:0.8rem;color:#b45309;background:#fffbeb;border:1px solid #fde68a;border-radius:6px;padding:0.5rem 0.75rem;">
+    「生成する」ボタンが反応しない場合は、画面の再読み込みを行ってください。
+  </p>
+
+  <section id="upload-section">
+    <div id="drop-zone">
+      <p>ここにEDC仕様JSONファイルをドロップ、またはクリックして選択</p>
+    </div>
+    <input type="file" id="file-input" accept=".json" style="display:none;">
+    <div id="file-name"></div>
+  </section>
+
+  <section id="dictionary-dir-section">
+    <details>
+      <summary style="cursor:pointer;color:#0284c7;">辞書バージョンの登録・管理(通常は不要)</summary>
+      <div style="margin-top:0.75rem;">
+        <button id="grant-data-dir-btn" type="button"></button>
+        <div id="data-dir-status" style="font-size:0.85rem;color:#64748b;margin-top:0.5rem;"></div>
+
+        <div id="dictionary-drop-zone" style="border: 2px dashed #94a3b8; border-radius: 8px; padding: 1.2rem; text-align: center; color: #64748b; margin-top: 1rem;">
+          <p>ここにMedDRAまたはWHO Drug/IDFのバージョンフォルダをドラッグ&ドロップ(要データフォルダアクセス許可)</p>
+        </div>
+        <div id="dictionary-import-status" style="font-size:0.85rem;color:#64748b;margin-top:0.5rem;"></div>
+      </div>
+    </details>
+  </section>
+
+  <section id="config-section" style="display:none;">
+    <label>被験者数: <input type="number" id="registration-n" value="100" min="1"></label>
+    <label>施設数: <input type="number" id="site-n" value="10" min="1"></label>
+    <label>乱数シード: <input type="text" id="random-seed" value="42"></label>
+    <label>AEレコード数(目安。有効な報告シートを持たない被験者分は除外されるため、実件数は前後します): <input type="number" id="ae-n" value="100" min="0"></label>
+    <label>登録開始日: <input type="date" id="registration-start-date" value="2024-04-01"></label>
+    <label>MedDRAバージョン: <select id="meddra-version"></select></label>
+    <label>WHO Drugバージョン: <select id="who-drug-version"></select></label>
+    <button id="generate-btn">生成する</button>
+    <div id="dictionary-status" style="font-size:0.85rem;color:#64748b;margin-top:0.5rem;"></div>
+  </section>
+
+  <section id="result-section" style="display:none;">
+    <div style="margin-top:2rem;">
+      <button id="download-all-btn">ZIPで一括ダウンロード</button>
+    </div>
+
+    <h2>生成ドメイン一覧</h2>
+    <div id="domain-summary"></div>
+
+    <div style="display:none;">
+      <h2>施設一覧(code/ja/en)</h2>
+      <div id="site-preview"></div>
+    </div>
+
+    <h2>DMドメイン プレビュー(先頭1件)</h2>
+    <div id="dm-preview"></div>
+
+    <h2>AEドメイン プレビュー(先頭1件)</h2>
+    <div id="ae-preview"></div>
+
+    <h2>DSドメイン プレビュー(先頭1件)</h2>
+    <div id="ds-preview"></div>
+
+    <div id="other-domains-preview"></div>
+  </section>
+
+  <script src="js/util.js"></script>
+  <script src="js/cdisc_variable_values.js"></script>
+  <script src="js/generation_constraints.js"></script>
+  <script src="js/dm_domain.js"></script>
+  <script src="js/ae_domain.js"></script>
+  <script src="js/ds_domain.js"></script>
+  <script src="js/other_domains.js"></script>
+  <script src="js/orres_realism.js"></script>
+  <script src="data/versions.js"></script>
+  <script src="js/dictionaries.js"></script>
+  <script src="js/dictionary_data_dir.js"></script>
+  <script src="js/meddra_import.js"></script>
+  <script src="js/who_drug_import.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
