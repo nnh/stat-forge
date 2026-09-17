@@ -1,6 +1,12 @@
 library(tidyverse)
+library(here)
 
-external_dict_dir <- "C:\\Users\\c0002691\\Box\\Stat\\Tools\\FORGE ver1.0\\web_tool\\data"
+source(here("resolve_os_path.R"))
+
+external_dict_dir <- resolve_os_path(
+  "/Users/mariko/Library/CloudStorage/Box-Box/Stat/Tools/test20260817",
+  "C:\\Users\\c0002691\\Box\\Stat\\Tools\\FORGE ver1.0\\web_tool\\data"
+)
 meddra_dir <- file.path(external_dict_dir, "MedDRA")
 
 who_drug_idf_parent_dir <- file.path(external_dict_dir, "WHO-DD_IDF")

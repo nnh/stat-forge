@@ -8,19 +8,29 @@ library(here)
 # dummy_data.zipの展開先に設定しておくこと。json_pathは下記でfortest2用に固定しているため、
 # test_config.R側の値(他テストと切り替えて使われる)を書き換える必要はない
 rm(list = ls())
+source(here("resolve_os_path.R"))
 
 # このファイル固定のjson_path。test_config.R側のjson_pathは他テストとの切り替えで
 # 意図せず別のJSONを指したままになりうる(実際に誤検知の原因になったため)、ここで固定する
-json_path <- "C:\\Users\\c0002691\\Box\\Datacenter\\Users\\ohtsuka\\2026\\20260826\\test2\\json\\fortest2_260826_1501.json"
+json_path <- resolve_os_path(
+  "/Users/mariko/Downloads/test20260826/fortest2_260826_1501.json",
+  "C:\\Users\\c0002691\\Box\\Datacenter\\Users\\ohtsuka\\2026\\20260826\\test2\\json\\fortest2_260826_1501.json"
+)
 
 # check_value_equals(固定値チェック)用のCSV設定ファイルのパス。内容(チェックしたい固定値)は
 # 試験ごとに異なるため、test_config.R(共通)ではなくここで指定する。リポジトリ外の任意の場所でよい
-fixed_value_checks_csv_path <- "C:\\Users\\c0002691\\Box\\Datacenter\\Users\\ohtsuka\\2026\\20260826\\test2\\fixed_value_checks_test2.csv"
+fixed_value_checks_csv_path <- resolve_os_path(
+  "/Users/mariko/Library/CloudStorage/Box-Box/Datacenter/Users/ohtsuka/2026/20260826/test2/fixed_value_checks_test2.csv",
+  "C:\\Users\\c0002691\\Box\\Datacenter\\Users\\ohtsuka\\2026\\20260826\\test2\\fixed_value_checks_test2.csv"
+)
 
 source(here("test_config.R"))
 # test_config.Rはjson_path(他テストとの切り替え用)も定義するが、このファイルは上で固定した
 # json_pathを優先して使うため、test_config.R側の値で上書きしないよう再度設定し直す
-json_path <- "C:\\Users\\c0002691\\Box\\Datacenter\\Users\\ohtsuka\\2026\\20260826\\test2\\json\\fortest2_260826_1501.json"
+json_path <- resolve_os_path(
+  "/Users/mariko/Downloads/test20260826/fortest2_260826_1501.json",
+  "C:\\Users\\c0002691\\Box\\Datacenter\\Users\\ohtsuka\\2026\\20260826\\test2\\json\\fortest2_260826_1501.json"
+)
 source(here("tools/validate_common.R"))
 
 # cdisc_variable_values・registration_n・who_drug_idfはEDC仕様(JSON)/辞書由来で被験者データには

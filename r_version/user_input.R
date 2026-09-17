@@ -1,4 +1,7 @@
 library(tidyverse)
+library(here)
+
+source(here("resolve_os_path.R"))
 
 # 登録予定被験者数
 registration_n <- 100
@@ -13,7 +16,10 @@ meddra_version <- NULL
 who_drug_idf_version_folder <- "2025 Mar 1"
 
 # 生成データ(ae/dm/ds/other_domains)をCSVとして出力するディレクトリ
-output_csv_dir <- "C:\\Users\\c0002691\\Downloads\\test20260916"
+output_csv_dir <- resolve_os_path(
+  "/Users/mariko/Downloads/test20260826",
+  "C:\\Users\\c0002691\\Downloads\\test20260916"
+)
 
 # 乱数シード。同じEDC仕様JSON・同じ被験者数等の条件であれば生成結果を再現できる。
 # 別のランダムなデータが欲しい場合はこの値を変える(NULLにすると完全ランダムに戻る)
