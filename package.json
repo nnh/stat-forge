@@ -5,7 +5,8 @@
   "description": "FORGE(Web版ダミーデータ生成ツール)のE2E自動化スクリプト",
   "type": "module",
   "scripts": {
-    "generate": "node scripts/generate_dummy_data.js"
+    "generate": "node scripts/generate_dummy_data.js",
+    "test:integer-input": "node scripts/test_integer_input_sanitization.js"
   },
   "devDependencies": {
     "adm-zip": "^0.5.10",

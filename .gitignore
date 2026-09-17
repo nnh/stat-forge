@@ -1,5 +1,6 @@
 # Logs
-logs
+# logsフォルダ自体はリポジトリ管理下に置きたいため(scripts/lib/log_file.jsの出力先)、
+# ディレクトリ丸ごとの除外はしない。個々のログファイルは下の*.logで除外される
 *.log
 npm-debug.log*
 yarn-debug.log*
@@ -157,4 +158,5 @@ r_version/test_config.R
 
 # 個人のローカルパスを書くCSV目検比較用スクリプト
 r_version/tools/compare_csv_manual_1.R
+
 r_version/tools/compare_csv_manual_2.R

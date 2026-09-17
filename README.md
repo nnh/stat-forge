@@ -122,6 +122,28 @@ node scripts/generate_dummy_data.js <jsonPath> <outputDir>
 `outputDir` に `r_version/test_config.R` の `other_domains_web_csv_dir` と同じフォルダを指定すれば、
 そのままRの検証スクリプト(前述「Rでのテスト」)から読み込める。
 
+実行内容(各ステップの確認結果・展開したファイル一覧と行数)は
+`logs/generate_dummy_data_<日時>.log` にも書き出される
+(`logs/`フォルダ自体はリポジトリ管理下、ログファイル自体は`.gitignore`対象)。
+
+### 入力欄の整数サニタイズ回帰テスト
+
+被験者数・施設数・AEレコード数の入力欄(`.integer-input`)が、全角数字・小数点・文字等の
+ASCII数字以外を実際に受け付けないことを確認する回帰テスト。EDC仕様JSONは不要。
+
+```bash
+npm run test:integer-input
+```
+
+`scripts/generate_dummy_data.js`(実際のダミーデータ生成)とは別スクリプトにしている。
+生成フローにこのテスト用の入力を混ぜて、誤って生成データに使われてしまう事故を避けるため
+
+実行結果は `logs/test_integer_input_sanitization_<日時>.log` にも書き出される
+(`logs/`フォルダ自体はリポジトリ管理下、ログファイル自体は`.gitignore`対象)
+
+実行結果は `logs/test_integer_input_sanitization_<日時>.log` にも書き出される
+(`logs/`フォルダ自体はリポジトリ管理下、ログファイル自体は`.gitignore`対象)
+
 ## ライセンス
 
 MIT License(`LICENSE`参照)
