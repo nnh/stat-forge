@@ -154,3 +154,7 @@ web_tool/data/who_drug/*
 # 個人のローカルパスを書くテスト設定ファイル(test_config.R.sampleをコピーして使う)
 r_version/test_config.R
 .Rproj.user
+
+# 個人のローカルパスを書くCSV目検比較用スクリプト
+r_version/tools/compare_csv_manual_1.R
+r_version/tools/compare_csv_manual_2.R

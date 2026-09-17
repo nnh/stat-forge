@@ -11,16 +11,16 @@ rm(list = ls())
 
 # このファイル固定のjson_path。test_config.R側のjson_pathは他テストとの切り替えで
 # 意図せず別のJSONを指したままになりうる(実際に誤検知の原因になったため)、ここで固定する
-json_path <- "/Users/mariko/Downloads/test20260826/fortest1_260826_1112.json"
+json_path <- "C:\\Users\\c0002691\\Box\\Datacenter\\Users\\ohtsuka\\2026\\20260826\\test1\\json\\fortest1_260826_1112.json"
 
 # check_value_equals(固定値チェック)用のCSV設定ファイルのパス。内容(チェックしたい固定値)は
 # 試験ごとに異なるため、test_config.R(共通)ではなくここで指定する。リポジトリ外の任意の場所でよい
-fixed_value_checks_csv_path <- "/Users/mariko/Library/CloudStorage/Box-Box/Datacenter/Users/ohtsuka/2026/20260826/test1/fixed_value_checks_test1.csv"
+fixed_value_checks_csv_path <- "C:\\Users\\c0002691\\Box\\Datacenter\\Users\\ohtsuka\\2026\\20260826\\test1\\fixed_value_checks_test1.csv"
 
 source(here("test_config.R"))
 # test_config.Rはjson_path(他テストとの切り替え用)も定義するが、このファイルは上で固定した
 # json_pathを優先して使うため、test_config.R側の値で上書きしないよう再度設定し直す
-json_path <- "/Users/mariko/Downloads/test20260826/fortest1_260826_1112.json"
+json_path <- "C:\\Users\\c0002691\\Box\\Datacenter\\Users\\ohtsuka\\2026\\20260826\\test1\\json\\fortest1_260826_1112.json"
 source(here("tools/validate_common.R"))
 
 # cdisc_variable_values・registration_nはEDC仕様(JSON)由来で被験者データには依存しないため、
