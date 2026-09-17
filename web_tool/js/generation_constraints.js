@@ -204,6 +204,34 @@ function parseAgeRefCondition(value) {
   };
 }
 
+// age(ref('sheet1', N1), ref('sheet2', N2)) OP1 X || age(ref('sheet1', N1), ref('sheet2', N2)) OP2 Y
+// のような、同じ2フィールドに対するage()比較を"||"で2つ組み合わせた条件(validate_presence_if。
+// 「範囲外のときだけ必須」パターン、例: age(...)<18 || age(...)>=65 = 18歳未満または65歳以上のときだけ必須)を
+// 解釈する。2つの断片が同じref1/ref2(alias_name+field番号)を参照しており、演算子が下限側(</<=)と
+// 上限側(>/>=)の組み合わせ(順不同)である場合だけ対応する(Rのparse_age_ref_or_condition()に対応)
+function parseAgeRefOrCondition(value) {
+  const clauses = value.split("||").map((c) => c.trim());
+  if (clauses.length !== 2) return null;
+  const parsed = clauses.map((c) => c.match(AGE_REF_CONDITION_RE));
+  if (parsed.some((m) => !m)) return null;
+  const refPairs = parsed.map((m) => `${m[1]}-${m[2]}-${m[3]}-${m[4]}`);
+  if (refPairs[0] !== refPairs[1]) return null;
+  const operators = parsed.map((m) => m[5]);
+  const thresholds = parsed.map((m) => Number(m[6]));
+  const lowerIdx = operators.findIndex((op) => op === "<" || op === "<=");
+  const upperIdx = operators.findIndex((op) => op === ">" || op === ">=");
+  if (lowerIdx === -1 || upperIdx === -1 || lowerIdx === upperIdx) return null;
+  const m0 = parsed[0];
+  return {
+    ref1AliasName: m0[1],
+    ref1Field: `field${m0[2]}`,
+    ref2AliasName: m0[3],
+    ref2Field: `field${m0[4]}`,
+    minAge: thresholds[lowerIdx],
+    maxAge: thresholds[upperIdx],
+  };
+}
+
 // value(例: (STAT.blank?) && (ref('registration', 4)=='F'))を"&&"で分割し、各断片の括弧を除いた文字列にする
 function parseAndClauses(value) {
   if (!value.includes("&&")) return null;
@@ -449,9 +477,20 @@ function buildAgeRefPresenceConditions(validatorTable, fieldLookup) {
     const key = `${vr.alias_name}|${vr.field_name}|${vr.value}`;
     if (seen.has(key)) return;
     seen.add(key);
-    const parsed = parseAgeRefCondition(vr.value);
-    if (!parsed) return;
-    const conditionType = AGE_OPERATOR_TO_CONDITION_TYPE[parsed.operator];
+    let parsed = parseAgeRefCondition(vr.value);
+    let conditionType = null;
+    let expectedValue = null;
+    if (parsed) {
+      conditionType = AGE_OPERATOR_TO_CONDITION_TYPE[parsed.operator];
+      expectedValue = String(parsed.threshold);
+    } else {
+      // age(...)<X || age(...)>=Y のような「範囲外のときだけ必須」パターン。
+      // minAge/maxAgeを"min,max"の形でexpected_valueに詰める(Rのage_outsideに対応)
+      parsed = parseAgeRefOrCondition(vr.value);
+      if (!parsed) return;
+      conditionType = "age_outside";
+      expectedValue = `${parsed.minAge},${parsed.maxAge}`;
+    }
     if (!conditionType) return;
     const ownMatches = lookupField(fieldLookup, vr.alias_name, vr.field_name);
     const ref1Matches = lookupField(fieldLookup, parsed.ref1AliasName, parsed.ref1Field);
@@ -472,7 +511,7 @@ function buildAgeRefPresenceConditions(validatorTable, fieldLookup) {
         ref2_cdisc_variable: ref2.cdisc_variable,
         ref2_alias_name: parsed.ref2AliasName,
         ref2_label: ref2.label != null ? ref2.label : null,
-        expected_value: String(parsed.threshold),
+        expected_value: expectedValue,
         condition_type: conditionType,
       });
     });
@@ -1025,12 +1064,16 @@ function applyPresenceConditions(data, presenceConditions, cdiscVariableToPrefix
   // equals/not_blankより先に適用する。ref_cdisc_variable/ref2_cdisc_variableという2つの参照先を持つ点が
   // 通常のequals/not_blankと異なるため、専用の処理にする
   applicable
-    .filter((pc) => ["age_gt", "age_ge", "age_lt", "age_le"].includes(pc.condition_type) && columns.has(pc.ref2_cdisc_variable))
+    .filter((pc) => ["age_gt", "age_ge", "age_lt", "age_le", "age_outside"].includes(pc.condition_type) && columns.has(pc.ref2_cdisc_variable))
     .forEach((pc) => {
       const targetRows = ownTargetRows(pc.alias_name, pc.label);
       const date1Vals = resolveRefVals(pc.ref_cdisc_variable, pc.ref_alias_name, pc.ref_label, pc.alias_name, pc.label);
       const date2Vals = resolveRefVals(pc.ref2_cdisc_variable, pc.ref2_alias_name, pc.ref2_label, pc.alias_name, pc.label);
-      const threshold = Number(pc.expected_value);
+      // age_outside(age(...)<minAge || age(...)>=maxAge、範囲外のときだけ必須)は
+      // expected_valueに"minAge,maxAge"の形で詰めてある(Rのage_outsideに対応)
+      const isOutside = pc.condition_type === "age_outside";
+      const threshold = isOutside ? null : Number(pc.expected_value);
+      const outsideBounds = isOutside ? pc.expected_value.split(",").map(Number) : null;
       data.forEach((row, i) => {
         if (!targetRows[i]) return;
         const d1 = date1Vals[i] != null ? new Date(date1Vals[i]) : null;
@@ -1042,6 +1085,7 @@ function applyPresenceConditions(data, presenceConditions, cdiscVariableToPrefix
           else if (pc.condition_type === "age_ge") satisfied = ageYears >= threshold;
           else if (pc.condition_type === "age_lt") satisfied = ageYears < threshold;
           else if (pc.condition_type === "age_le") satisfied = ageYears <= threshold;
+          else if (isOutside) satisfied = ageYears < outsideBounds[0] || ageYears >= outsideBounds[1];
         }
         if (!satisfied) {
           row[pc.cdisc_variable] = null;

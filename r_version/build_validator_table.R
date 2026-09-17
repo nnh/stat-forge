@@ -275,6 +275,39 @@ parse_age_ref_condition <- function(value) {
   )
 }
 
+# age(ref('sheet1', N1), ref('sheet2', N2)) OP1 X || age(ref('sheet1', N1), ref('sheet2', N2)) OP2 Y
+# のような、同じ2フィールドに対するage()比較を"||"で2つ組み合わせた条件(validate_presence_if。
+# 「範囲外のときだけ必須」パターン、例: age(...)<18 || age(...)>=65 = 18歳未満または65歳以上のときだけ必須)を
+# 解釈する。2つの断片が同じref1/ref2(alias_name+field番号)を参照しており、演算子が下限側(</<=)と
+# 上限側(>/>=)の組み合わせ(順不同)である場合だけ対応する。それ以外(3つ以上への分割、参照先不一致、
+# 演算子が同じ側同士等)はNULL(未対応)
+parse_age_ref_or_condition <- function(value) {
+  clauses <- value %>% str_split("\\|\\|") %>% pluck(1) %>% str_trim()
+  if (length(clauses) != 2) {
+    return(NULL)
+  }
+  m <- str_match(clauses, age_ref_condition_pattern)
+  if (any(is.na(m[, 1]))) {
+    return(NULL)
+  }
+  ref_pairs <- str_c(m[, 2], "-", m[, 3], "-", m[, 4], "-", m[, 5])
+  if (length(unique(ref_pairs)) != 1) {
+    return(NULL)
+  }
+  operators <- m[, 6]
+  thresholds <- as.numeric(m[, 7])
+  lower_idx <- which(operators %in% c("<", "<="))
+  upper_idx <- which(operators %in% c(">", ">="))
+  if (length(lower_idx) != 1 || length(upper_idx) != 1) {
+    return(NULL)
+  }
+  list(
+    ref1_alias_name = m[1, 2], ref1_field = str_c("field", m[1, 3]),
+    ref2_alias_name = m[1, 4], ref2_field = str_c("field", m[1, 5]),
+    min_age = thresholds[lower_idx], max_age = thresholds[upper_idx]
+  )
+}
+
 # validator_type=="formula" & validator_key=="validate_formula_if"の場合、
 # 上記のage()条件から、自分自身(field_name)以外のもう一方のフィールド(参照先の日付)と下限/上限年齢を取り出す。
 # field_nameがage()の2引数のどちらとも一致しない場合はNULL(未対応)

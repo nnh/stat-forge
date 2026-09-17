@@ -525,7 +525,7 @@ apply_presence_conditions <- function(data, presence_conditions, cdisc_variable_
     applicable[["ref2_label"]] <- NA_character_
   }
   age_conditions <- applicable %>%
-    filter(condition_type %in% c("age_gt", "age_ge", "age_lt", "age_le"), ref2_cdisc_variable %in% colnames(data)) %>%
+    filter(condition_type %in% c("age_gt", "age_ge", "age_lt", "age_le", "age_outside"), ref2_cdisc_variable %in% colnames(data)) %>%
     distinct(cdisc_variable, ref_cdisc_variable, ref_alias_name, ref_label, ref2_cdisc_variable, ref2_alias_name, ref2_label, alias_name, label, condition_type, expected_value)
   for (i in seq_len(nrow(age_conditions))) {
     var_name <- age_conditions[["cdisc_variable"]][i]
@@ -538,19 +538,28 @@ apply_presence_conditions <- function(data, presence_conditions, cdisc_variable_
     ref2_label_i <- age_conditions[["ref2_label"]][i]
     ref2_alias_name_i <- age_conditions[["ref2_alias_name"]][i]
     op <- age_conditions[["condition_type"]][i]
-    threshold <- suppressWarnings(as.numeric(age_conditions[["expected_value"]][i]))
 
     target_rows <- own_target_rows(own_alias_name, own_label)
     date1 <- as.Date(resolve_ref_vals(ref_var, ref_alias_name_i, ref_label_i, own_alias_name, own_label))
     date2 <- as.Date(resolve_ref_vals(ref2_var, ref2_alias_name_i, ref2_label_i, own_alias_name, own_label))
     age_years <- as.numeric(date1 - date2) / 365.25
-    satisfied <- switch(op,
-      age_gt = age_years > threshold,
-      age_ge = age_years >= threshold,
-      age_lt = age_years < threshold,
-      age_le = age_years <= threshold,
-      rep(NA, length(age_years))
-    )
+    if (op == "age_outside") {
+      # age(...)<min_age || age(...)>=max_age (範囲外のときだけ必須)。expected_valueに
+      # "min_age,max_age"の形で詰めてある(build_generation_constraints.Rのparse_age_ref_or_condition参照)
+      bounds <- suppressWarnings(as.numeric(str_split(age_conditions[["expected_value"]][i], ",")[[1]]))
+      min_age <- bounds[1]
+      max_age <- bounds[2]
+      satisfied <- age_years < min_age | age_years >= max_age
+    } else {
+      threshold <- suppressWarnings(as.numeric(age_conditions[["expected_value"]][i]))
+      satisfied <- switch(op,
+        age_gt = age_years > threshold,
+        age_ge = age_years >= threshold,
+        age_lt = age_years < threshold,
+        age_le = age_years <= threshold,
+        rep(NA, length(age_years))
+      )
+    }
     satisfied[is.na(satisfied)] <- FALSE
     mismatch <- target_rows & !satisfied
     data[[var_name]][mismatch] <- NA
