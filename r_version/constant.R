@@ -5,6 +5,10 @@ meddra_dir <- file.path(external_dict_dir, "MedDRA")
 
 who_drug_idf_parent_dir <- file.path(external_dict_dir, "WHO-DD_IDF")
 
+# Web版が使うWHO Drug/IDFの変換済み.js置き場(convert_who_drug_to_js.Rの出力先)。
+# who_drug_idf_parent_dir配下に生データ(WHODD/IDF)が無い場合のフォールバックとして使う
+who_drug_js_dir <- file.path(external_dict_dir, "who_drug")
+
 # AEドメインに必ず1件以上含めたい病名のLLTコード(複数指定可、空でもよい)
 required_ae_llt_codes <- c("10052464", "10062314", "10057913", "10055032", "10024855", "10039906", "10042772", "10047281", "10047294", "10065341", "10047302")
 
