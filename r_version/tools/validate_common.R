@@ -1,6 +1,8 @@
 library(tidyverse)
 library(here)
 
+source(here("resolve_os_path.R"))
+
 # DM/DS/AE/other_domainsの構造的な自動チェック(validate_dm()等)は、それぞれ専用ファイルに分けている。
 # testN.Rが個別にsourceしなくても済むよう、ここでまとめてsourceしておく
 source(here("tools/validate_dm.R"))
@@ -16,8 +18,14 @@ source(here("build_ds_domain.R"))
 # test1・test2は実データが用意できているのでパスを指定し、test3・test4はまだ実データが無いので
 # NULLにしておく(run_full_validation()はcsv_dir=NULLだと実データとの比較をスキップする)
 csv_dir_by_file <- list(
-  "fortest1_260826_1112.json" = "/Users/mariko/Library/CloudStorage/Box-Box/Datacenter/Users/ohtsuka/2026/20260826/test1/rawdata",
-  "fortest2_260826_1501.json" = "/Users/mariko/Library/CloudStorage/Box-Box/Datacenter/Users/ohtsuka/2026/20260826/test2/rawdata",
+  "fortest1_260826_1112.json" = resolve_os_path(
+    "/Users/mariko/Library/CloudStorage/Box-Box/Datacenter/Users/ohtsuka/2026/20260826/test1/rawdata",
+    "C:\\Users\\c0002691\\Box\\Datacenter\\Users\\ohtsuka\\2026\\20260826\\test1\\rawdata"
+  ),
+  "fortest2_260826_1501.json" = resolve_os_path(
+    "/Users/mariko/Library/CloudStorage/Box-Box/Datacenter/Users/ohtsuka/2026/20260826/test2/rawdata",
+    "C:\\Users\\c0002691\\Box\\Datacenter\\Users\\ohtsuka\\2026\\20260826\\test2\\rawdata"
+  ),
   "fortest3_260826_1452.json" = NULL,
   "fortest4_260826_1501.json" = NULL
 )

@@ -5,15 +5,8 @@ library(here)
 
 source(here("constant.R"))
 
-build_meddra_hierarchy <- function(target_subfolder = NULL) {
-  # MedDRA直下のバージョン別サブフォルダ名の一覧
-  meddra_subfolders <- list.dirs(meddra_dir, full.names = FALSE, recursive = FALSE)
-
-  # 読み込み対象のサブフォルダ（バージョン）を指定。未指定なら先頭を使う
-  if (is.null(target_subfolder)) {
-    target_subfolder <- meddra_subfolders[1]
-  }
-
+# MedDRAの.ascファイル一式(バージョン別サブフォルダ)から階層テーブルを構築する
+build_meddra_hierarchy_from_asc <- function(target_subfolder) {
   # 対象サブフォルダ内の.ascファイルパス一覧
   asc_files <- list.files(
     file.path(meddra_dir, target_subfolder),
@@ -89,4 +82,46 @@ build_meddra_hierarchy <- function(target_subfolder = NULL) {
   soc_pt_llt_hlgt_hlt <- soc_pt_hlgt_hlt %>% inner_join(llt, by = "pt_code", relationship = "many-to-many")
 
   soc_pt_llt_hlgt_hlt
+}
+
+# Web版が使うMedDRAの.js(convert_meddra_to_js.Rで.ascから変換済み、コード・英語名のみ)から
+# 階層テーブルを構築する。.ascファイル一式が手元に無い環境向けのフォールバック
+build_meddra_hierarchy_from_js <- function(version) {
+  safe_filename <- str_replace_all(version, "[^A-Za-z0-9._-]", "_")
+  js_path <- file.path(meddra_dir, str_c(safe_filename, ".js"))
+  if (!file.exists(js_path)) {
+    stop("MedDRAの.ascフォルダも.jsファイルも見つかりません: ", js_path)
+  }
+
+  js_text <- read_file(js_path)
+  json_str <- str_match(js_text, "(?s)window\\.__meddraVersions\\[[^\\]]*\\]\\s*=\\s*(\\{.*\\});")[, 2]
+  parsed <- jsonlite::fromJSON(json_str)
+
+  hierarchy <- as_tibble(parsed$rows, .name_repair = "minimal")
+  colnames(hierarchy) <- parsed$columns
+  hierarchy
+}
+
+build_meddra_hierarchy <- function(target_subfolder = NULL) {
+  # MedDRA直下のバージョン別サブフォルダ名の一覧(.ascファイル一式が入っている場合の構成)
+  meddra_subfolders <- list.dirs(meddra_dir, full.names = FALSE, recursive = FALSE)
+
+  # 読み込み対象のバージョンを指定。未指定なら.ascサブフォルダの先頭、それも無ければ.jsファイルの先頭を使う
+  if (is.null(target_subfolder)) {
+    if (length(meddra_subfolders) > 0) {
+      target_subfolder <- meddra_subfolders[1]
+    } else {
+      js_files <- list.files(meddra_dir, pattern = "\\.js$")
+      if (length(js_files) == 0) {
+        stop("MedDRAの.ascサブフォルダも.jsファイルも見つかりません: ", meddra_dir)
+      }
+      target_subfolder <- tools::file_path_sans_ext(sort(js_files)[1])
+    }
+  }
+
+  if (target_subfolder %in% meddra_subfolders) {
+    build_meddra_hierarchy_from_asc(target_subfolder)
+  } else {
+    build_meddra_hierarchy_from_js(target_subfolder)
+  }
 }

@@ -9,6 +9,10 @@ build_who_drug_idf <- function(who_drug_idf_parent_dir, who_drug_idf_version_fol
   whodd_dir <- file.path(version_dir, "WHODD")
   idf_dir <- file.path(version_dir, "IDF")
 
+  if (!dir.exists(whodd_dir) || !dir.exists(idf_dir)) {
+    return(build_who_drug_idf_from_js(who_drug_idf_version_folder))
+  }
+
   # WHODD: DDDRCODE(WHO Drug Dictionary側の薬剤コード)とIDFCODE(IDF側のコード)の対応表。
   # タブ区切り・ヘッダー無し。5列目(note)は"WHO Global"などの注記で、無い行もある
   id_mapping <- read_tsv(
@@ -64,4 +68,23 @@ build_who_drug_idf <- function(who_drug_idf_parent_dir, who_drug_idf_version_fol
     left_join(whodd_generic_names, by = "ddd_code")
 
   idf_id_mapping_combined
+}
+
+# Web版が使うWHO Drug/IDFの.js(convert_who_drug_to_js.Rで生データから変換済み、
+# drug_code/full_name_en/generic_name_enのみ)から読み込む。生データ(WHODD/IDFフォルダ)が
+# 手元に無い環境向けのフォールバック
+build_who_drug_idf_from_js <- function(version) {
+  safe_filename <- str_replace_all(version, "[^A-Za-z0-9._-]", "_")
+  js_path <- file.path(who_drug_js_dir, str_c(safe_filename, ".js"))
+  if (!file.exists(js_path)) {
+    stop("WHO Drug/IDFの生データフォルダも.jsファイルも見つかりません: ", js_path)
+  }
+
+  js_text <- read_file(js_path)
+  json_str <- str_match(js_text, "(?s)window\\.__whoDrugVersions\\[[^\\]]*\\]\\s*=\\s*(\\{.*\\});")[, 2]
+  parsed <- jsonlite::fromJSON(json_str)
+
+  idf <- as_tibble(parsed$rows, .name_repair = "minimal")
+  colnames(idf) <- parsed$columns
+  idf
 }

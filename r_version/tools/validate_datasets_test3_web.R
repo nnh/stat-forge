@@ -1,13 +1,21 @@
 library(here)
 rm(list = ls())
+source(here("resolve_os_path.R"))
+
 # check_value_equals(固定値チェック)用のCSV設定ファイルのパス。内容(チェックしたい固定値)は
 # 試験ごとに異なるため、test_config.R(共通)ではなくここで指定する。リポジトリ外の任意の場所でよい
-fixed_value_checks_csv_path <- "/Users/mariko/Library/CloudStorage/Box-Box/Datacenter/Users/ohtsuka/2026/20260826/test3/fixed_value_checks_test3.csv"
+fixed_value_checks_csv_path <- resolve_os_path(
+  "/Users/mariko/Library/CloudStorage/Box-Box/Datacenter/Users/ohtsuka/2026/20260826/test3/fixed_value_checks_test3.csv",
+  "C:\\Users\\c0002691\\Box\\Datacenter\\Users\\ohtsuka\\2026\\20260826\\test3\\fixed_value_checks_test3.csv"
+)
 
 source(here("test_config.R"))
 # test_config.Rはjson_path(他テストとの切り替え用)も定義するが、このファイルは上で固定した
 # json_pathを優先して使うため、test_config.R側の値で上書きしないよう再度設定し直す
-json_path <- "/Users/mariko/Downloads/test20260826/fortest3_260826_1452.json"
+json_path <- resolve_os_path(
+  "/Users/mariko/Downloads/test20260826/fortest3_260826_1452.json",
+  "C:\\Users\\c0002691\\Box\\Datacenter\\Users\\ohtsuka\\2026\\20260826\\test3\\json\\fortest3_260826_1452.json"
+)
 source(here("tools/validate_common.R"))
 
 # cdisc_variable_values・registration_n・who_drug_idfはEDC仕様(JSON)/辞書由来で被験者データには
