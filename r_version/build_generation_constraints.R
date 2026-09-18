@@ -158,7 +158,10 @@ build_generation_constraints <- function(validator_table, df_cdisc, field_refere
             )
           } else if (clause[["kind"]] == "field_ref") {
             ref_var <- resolve_ref_cdisc_variable(alias_name, clause[["ref_field"]])
-            if (length(ref_var) == 0 || ref_var[1] == cdisc_variable) return(tibble())
+            # LB/VS/QS等、同一シート内の複数インスタンスが同じcdisc_variable名(例: LBORRES)を
+            # 共有するドメインでは、cdisc_variable名だけの比較では別インスタンスへの正当な参照まで
+            # 自己参照と誤判定してしまうため、実際のフィールド名同士で比較する
+            if (length(ref_var) == 0 || clause[["ref_field"]] == field_name) return(tibble())
             ref_lbl <- field_to_label %>% filter(alias_name == .env$alias_name, field == clause[["ref_field"]]) %>% pull(label) %>% unname()
             tibble(
               cdisc_variable = cdisc_variable,
@@ -175,7 +178,7 @@ build_generation_constraints <- function(validator_table, df_cdisc, field_refere
             # 複数のexpected_value行を作る(apply_presence_conditions側でref_cdisc_variableごとに
             # グルーピングされ、値の集合に対するOR判定になる。異なるref_cdisc_variable同士はAND)
             ref_var <- resolve_ref_cdisc_variable(alias_name, clause[["ref_field"]])
-            if (length(ref_var) == 0 || ref_var[1] == cdisc_variable) return(tibble())
+            if (length(ref_var) == 0 || clause[["ref_field"]] == field_name) return(tibble())
             ref_lbl <- field_to_label %>% filter(alias_name == .env$alias_name, field == clause[["ref_field"]]) %>% pull(label) %>% unname()
             tibble(
               cdisc_variable = cdisc_variable,
@@ -192,7 +195,7 @@ build_generation_constraints <- function(validator_table, df_cdisc, field_refere
             # "f16>=2"(骨壊死のGradeが2以上))。equals/not_blankと異なりref側の値を数値として
             # 閾値と比較する必要があるため、専用のcondition_type(numeric_ge/le/gt/lt)にする
             ref_var <- resolve_ref_cdisc_variable(alias_name, clause[["ref_field"]])
-            if (length(ref_var) == 0 || ref_var[1] == cdisc_variable) return(tibble())
+            if (length(ref_var) == 0 || clause[["ref_field"]] == field_name) return(tibble())
             ref_lbl <- field_to_label %>% filter(alias_name == .env$alias_name, field == clause[["ref_field"]]) %>% pull(label) %>% unname()
             numeric_condition_type <- case_when(
               clause[["operator"]] == ">=" ~ "numeric_ge",

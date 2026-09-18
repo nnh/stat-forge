@@ -96,6 +96,12 @@ function extractDateCrossRefOffsetDays(validatorType, value) {
 // 異なるフィールドが混ざる、またはパースできない断片があればnull(Rのparse_presence_or_conditions()に対応)
 const PRESENCE_OR_FRAGMENT_RE = /^(?:field|f)([0-9]+)\s*==\s*(?:'([^']*)'|"([^"]*)"|(\S+))$/;
 function parsePresenceOrConditions(value) {
+  // "&&"を含む値(例: "field104=='POSITIVE'&&STAT.blank?")は"&&"で組み合わさった条件
+  // (buildAndPresenceConditions()側で処理する)であり、ここでの単純な"||"分割の対象ではない。
+  // ガードが無いと、"||"が無いために値全体が1個の断片として扱われ、最後の代替パターン(\S+)が
+  // 空白を含まない文字列全体に貪欲マッチしてしまい、クォートや"&&"以降を含む壊れた値
+  // (例: "'POSITIVE'&&STAT.blank?")がそのままexpected_valueとして登録されるバグになる
+  if (value.includes("&&")) return null;
   const fragments = value.split("||").map((s) => s.trim());
   const matches = fragments.map((f) => f.match(PRESENCE_OR_FRAGMENT_RE));
   if (matches.some((m) => m === null)) return null;
@@ -583,7 +589,12 @@ function buildAndPresenceConditions(validatorTable, fieldLookup) {
           const refMatches = lookupField(fieldLookup, vr.alias_name, clause.refField);
           refMatches.forEach((ref) => {
             const refCdiscVariable = ref.field_type === "meddra" ? `${ref.prefix}LLTCD` : ref.cdisc_variable;
-            if (refCdiscVariable == null || refCdiscVariable === own.cdisc_variable) return;
+            // LB/VS/QS等、同一シート内の複数インスタンスが同じcdisc_variable名(例: LBORRES)を
+            // 共有するドメインでは、cdisc_variable名だけの比較では別インスタンスへの正当な参照まで
+            // 自己参照と誤判定してしまう。lookupField()が返すオブジェクトは元のフィールド名(field)を
+            // 保持しないため、呼び出し元がすでに持っているフィールド名(vr.field_name/clause.refField)
+            // 同士で比較する
+            if (refCdiscVariable == null || clause.refField === vr.field_name) return;
             rows.push({
               cdisc_variable: own.cdisc_variable,
               label: own.label,
@@ -602,7 +613,7 @@ function buildAndPresenceConditions(validatorTable, fieldLookup) {
           const refMatches = lookupField(fieldLookup, vr.alias_name, clause.refField);
           refMatches.forEach((ref) => {
             const refCdiscVariable = ref.field_type === "meddra" ? `${ref.prefix}LLTCD` : ref.cdisc_variable;
-            if (refCdiscVariable == null || refCdiscVariable === own.cdisc_variable) return;
+            if (refCdiscVariable == null || clause.refField === vr.field_name) return;
             clause.values.forEach((expectedValue) => {
               rows.push({
                 cdisc_variable: own.cdisc_variable,
@@ -626,7 +637,7 @@ function buildAndPresenceConditions(validatorTable, fieldLookup) {
           if (!numericConditionType) return;
           refMatches.forEach((ref) => {
             const refCdiscVariable = ref.field_type === "meddra" ? `${ref.prefix}LLTCD` : ref.cdisc_variable;
-            if (refCdiscVariable == null || refCdiscVariable === own.cdisc_variable) return;
+            if (refCdiscVariable == null || clause.refField === vr.field_name) return;
             rows.push({
               cdisc_variable: own.cdisc_variable,
               label: own.label,

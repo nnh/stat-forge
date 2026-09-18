@@ -116,7 +116,16 @@ extract_date_cross_ref_offset_days <- function(validator_type, value) {
 # フィールド名と値の一覧を返す。値は'X'/"X"のように引用符(シングル・ダブルどちらも)付きの場合と、
 # 2 のように引用符無しの数値/文字列の場合の両方に対応する。
 # 異なるフィールドが混ざる場合やパースできない断片があればNULL(未対応)
+# "&&"を含む値(例: "field104=='POSITIVE'&&STAT.blank?")は"&&"で組み合わさった条件
+# (build_generation_constraints.R側のand_presence_conditionsで処理する)であり、ここでの単純な
+# "||"分割の対象ではない。ガードが無いと、"||"が無いために値全体が1個の断片として扱われ、
+# 最後の代替パターン([^\\s]+)が空白を含まない文字列全体に貪欲マッチしてしまい、クォートや
+# "&&"以降を含む壊れた値(例: "'POSITIVE'&&STAT.blank?")がそのままexpected_valueとして
+# 登録されるバグになる
 parse_presence_or_conditions <- function(value) {
+  if (str_detect(value, fixed("&&"))) {
+    return(NULL)
+  }
   fragments <- value %>% str_split("\\|\\|") %>% pluck(1) %>% str_trim()
   m <- str_match(fragments, "^(?:field|f)([0-9]+)\\s*==\\s*(?:'([^']*)'|\"([^\"]*)\"|([^\\s]+))$")
   if (any(is.na(m[, 1]))) {

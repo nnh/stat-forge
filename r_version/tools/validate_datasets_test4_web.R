@@ -78,6 +78,32 @@ list2env(other_domains, envir = .GlobalEnv)
 # test4個別チェック
 # ここにドメインごとのチェックを追加していく(参考: tools/validate_datasets_test1_web.R・test2_web.R・test3_web.R)
 
+# CM(screening_100)
+# screening_100の先行治療歴はCMTRT(AZACITIDINE/HYDREA/OTHER PRIOR THERAPY)ごとに3ブロックあり、
+# いずれもCMCAT/CMENRTPT/CMENTPT/CMPRESPは固定値、CMOCCUR(Y/N/U)は必須(値は被験者ごとに異なる)
+target_cm_cols <- c("CMOCCUR", "CMPRESP", "CMCAT", "CMENRTPT", "CMENTPT")
+
+tmp_cm <- cm %>% filter(CMTRT == "AZACITIDINE")
+tmp_cm %>% check_required_vars(target_cm_cols, domain_name = "CM")
+suffix <- "_1"
+tmp_cm <- tmp_cm %>% rename_with(~ str_c(.x, suffix), all_of(target_cm_cols))
+str_c(target_cm_cols, suffix) %>%
+  walk(~ run_value_equals_checks_from_csv(tmp_cm, "CM", .x, fixed_value_checks_csv_path))
+
+tmp_cm <- cm %>% filter(CMTRT == "HYDREA")
+tmp_cm %>% check_required_vars(target_cm_cols, domain_name = "CM")
+suffix <- "_2"
+tmp_cm <- tmp_cm %>% rename_with(~ str_c(.x, suffix), all_of(target_cm_cols))
+str_c(target_cm_cols, suffix) %>%
+  walk(~ run_value_equals_checks_from_csv(tmp_cm, "CM", .x, fixed_value_checks_csv_path))
+
+tmp_cm <- cm %>% filter(CMTRT == "OTHER PRIOR THERAPY")
+tmp_cm %>% check_required_vars(target_cm_cols, domain_name = "CM")
+suffix <- "_3"
+tmp_cm <- tmp_cm %>% rename_with(~ str_c(.x, suffix), all_of(target_cm_cols))
+str_c(target_cm_cols, suffix) %>%
+  walk(~ run_value_equals_checks_from_csv(tmp_cm, "CM", .x, fixed_value_checks_csv_path))
+
 # DM
 c("RFICDTC", "BRTHDTC", "SEX", "RACE", "COUNTRY") %>% check_required_vars(dm, ., domain_name = "DM")
 dm %>% check_date_before_today(c("BRTHDTC"), domain_name = "DM")
@@ -96,9 +122,11 @@ run_ie_testcd_checks <- function(ie, ietestcd, suffix, fixed_value_checks_csv_pa
   tmp_ie %>%
     filter(!!str_c("IEORRES", suffix) != "") %>%
     check_required_vars("IEDTC", domain_name = "IE")
-  tmp_ie %>%
-    filter(!!str_c("IEORRES", suffix) == "") %>%
-    check_blank_vars("IEDTC", domain_name = "IE")
+  if (tmp_ie %>%
+    filter(!!str_c("IEORRES", suffix) == "") %>% nrow() > 0) {
+    stop(str_c(ietestcd, "エラー"))
+  }
+
 }
 
 ie %>% check_date_before_today("IEDTC", domain_name = "IE")
@@ -106,7 +134,7 @@ ie %>% run_ie_testcd_checks("IN01", "_1", fixed_value_checks_csv_path)
 
 # IN02(field17)はvalidate_presence_if(age(ref('registration',1), ref('registration',2)) <18 ||
 # age(...)>=65)により、IEORRESが他のIETESTCDと違い全行固定値ではなく条件付きになる
-# (年齢が18歳未満または65歳以上の行だけ必須・値は"N"固定、18歳以上65歳未満の行は空欄のはず)。
+# (年齢が18歳未満または65歳以上の行だけ必須・値は"N"固定、18歳以上65歳未満の行は存在しないのが正)。
 # IETEST/IECATは他と同様に固定値チェックし、IEORRES/IEDTCはこのブロックで個別に確認する
 age_years <- function(birth_date, ref_date) {
   birth_date <- as.Date(birth_date)
@@ -131,12 +159,15 @@ tmp_ie_in02_out_of_range %>% rename(IEORRES_2 = IEORRES) %>%
   run_value_equals_checks_from_csv("IE", "IEORRES_2", fixed_value_checks_csv_path)
 
 # 年齢が範囲内(18歳以上65歳未満): IEORRESは空欄のはず
-tmp_ie_in02_age %>% filter(age_at_consent >= 18 & age_at_consent < 65) %>%
-  check_blank_vars("IEORRES", domain_name = "IE(IN02)")
+if (tmp_ie_in02_age %>% filter(age_at_consent >= 18 & age_at_consent < 65) %>% nrow() > 0) {
+  stop("IE02エラー1")
+}
 
 # IEDTC(確認日)は、他のIETESTCDと同様にIEORRESが入っている行だけ必須・入っていない行は空欄のはず
 tmp_ie_in02 %>% filter(IEORRES != "") %>% check_required_vars("IEDTC", domain_name = "IE(IN02)")
-tmp_ie_in02 %>% filter(IEORRES == "") %>% check_blank_vars("IEDTC", domain_name = "IE(IN02)")
+if (tmp_ie_in02 %>% filter(IEORRES == "") %>% nrow() > 0) {
+  stop("IE02エラー2")
+}
 
 ie %>% run_ie_testcd_checks("IN03", "_3", fixed_value_checks_csv_path)
 ie %>% run_ie_testcd_checks("IN04", "_4", fixed_value_checks_csv_path)
@@ -157,3 +188,130 @@ ie %>% run_ie_testcd_checks("EX10", "_18", fixed_value_checks_csv_path)
 ie %>% run_ie_testcd_checks("EX11", "_19", fixed_value_checks_csv_path)
 ie %>% run_ie_testcd_checks("EX12", "_20", fixed_value_checks_csv_path)
 ie %>% run_ie_testcd_checks("EX13", "_21", fixed_value_checks_csv_path)
+
+# LB
+lb %>% check_date_before_today("LBDTC", domain_name = "LB")
+tmp_lb <- lb %>% filter(LBSPID == "screening_100" & LBTESTCD == "CYEXAM")
+target_lb_cols <- c("LBTEST", "LBCAT", "LBMETHOD")
+tmp_lb %>% check_required_vars(target_lb_cols, domain_name = "lb")
+suffix <- "_1"
+tmp_lb <- tmp_lb %>% rename_with(~ str_c(.x, suffix), all_of(target_lb_cols))
+str_c(target_lb_cols, suffix) %>%
+  walk(~ run_value_equals_checks_from_csv(tmp_lb, "LB", .x, fixed_value_checks_csv_path))
+target_lb_cols <- "LBORRES"
+tmp_lb <- lb %>% filter(LBSPID == "screening_100" & LBTESTCD == "CYEXAM" & LBSTAT == "NOT DONE")
+target_lb_cols %>% check_blank_vars(tmp_lb, ., domain_name = "LB")
+tmp_lb <- lb %>% filter(LBSPID == "screening_100" & LBTESTCD == "CYEXAM" & LBSTAT != "NOT DONE")
+tmp_lb <- tmp_lb %>% rename_with(~ str_c(.x, suffix), all_of(target_lb_cols))
+str_c(target_lb_cols, suffix) %>%
+  walk(~ run_value_equals_checks_from_csv(tmp_lb, "LB", .x, fixed_value_checks_csv_path))
+
+# 染色体異常チェックリスト項目(LBTESTCD、例: T_8_21)1件分の確認。
+# LBTEST/LBCAT/LBMETHOD/LBORRESの固定値チェックに加え、この項目のレコードを持つUSUBJIDと、
+# CYEXAM(染色体検査本体)がNOT DONE以外・結果がNORMAL/ABNORMALのいずれかで確定しているUSUBJIDが
+# 完全に一致すること(両方向)を確認する
+check_lb_chromosomal_abnormality <- function(lb, lbtestcd, suffix, fixed_value_checks_csv_path) {
+  target_lb_cols <- c("LBTEST", "LBCAT", "LBMETHOD", "LBORRES")
+  tmp_lb <- lb %>% filter(LBSPID == "screening_100" & LBTESTCD == lbtestcd)
+  tmp_lb <- tmp_lb %>% rename_with(~ str_c(.x, suffix), all_of(target_lb_cols))
+  str_c(target_lb_cols, suffix) %>%
+    walk(~ run_value_equals_checks_from_csv(tmp_lb, "LB", .x, fixed_value_checks_csv_path))
+
+  tmp_lb_usubjid <- lb %>% filter(LBSPID == "screening_100" & LBTESTCD == lbtestcd) %>% select(USUBJID)
+  tmp_cyexam_usubjid <- lb %>%
+    filter(LBSPID == "screening_100" & LBTESTCD == "CYEXAM" & LBSTAT != "NOT DONE" & (LBORRES == "NORMAL" | LBORRES == "ABNORMAL")) %>%
+    select(USUBJID)
+
+  if (tmp_lb_usubjid %>% anti_join(tmp_cyexam_usubjid, by = "USUBJID") %>% nrow() > 0) {
+    stop(str_c("ERROR ", lbtestcd, "-1"))
+  }
+  if (tmp_cyexam_usubjid %>% anti_join(tmp_lb_usubjid, by = "USUBJID") %>% nrow() > 0) {
+    stop(str_c("ERROR ", lbtestcd, "-2"))
+  }
+}
+
+check_lb_chromosomal_abnormality(lb, "T_8_21", "_2", fixed_value_checks_csv_path)
+check_lb_chromosomal_abnormality(lb, "INV16Q22", "_3", fixed_value_checks_csv_path)
+check_lb_chromosomal_abnormality(lb, "T_16_16", "_4", fixed_value_checks_csv_path)
+check_lb_chromosomal_abnormality(lb, "T911Q233", "_5", fixed_value_checks_csv_path)
+check_lb_chromosomal_abnormality(lb, "TV11Q233", "_6", fixed_value_checks_csv_path)
+check_lb_chromosomal_abnormality(lb, "INV3Q262", "_7", fixed_value_checks_csv_path)
+check_lb_chromosomal_abnormality(lb, "T33Q262", "_8", fixed_value_checks_csv_path)
+check_lb_chromosomal_abnormality(lb, "T122Q133", "_9", fixed_value_checks_csv_path)
+check_lb_chromosomal_abnormality(lb, "T69Q341", "_10", fixed_value_checks_csv_path)
+check_lb_chromosomal_abnormality(lb, "T_9_22", "_11", fixed_value_checks_csv_path)
+check_lb_chromosomal_abnormality(lb, "T_8_16", "_12", fixed_value_checks_csv_path)
+check_lb_chromosomal_abnormality(lb, "AMLOTRRT", "_13", fixed_value_checks_csv_path)
+check_lb_chromosomal_abnormality(lb, "MSY5", "_14", fixed_value_checks_csv_path)
+check_lb_chromosomal_abnormality(lb, "DEL5Q", "_15", fixed_value_checks_csv_path)
+check_lb_chromosomal_abnormality(lb, "DEL7Q", "_16", fixed_value_checks_csv_path)
+check_lb_chromosomal_abnormality(lb, "TRISOM8", "_17", fixed_value_checks_csv_path)
+check_lb_chromosomal_abnormality(lb, "MSY7", "_18", fixed_value_checks_csv_path)
+check_lb_chromosomal_abnormality(lb, "ISOCH17Q", "_19", fixed_value_checks_csv_path)
+check_lb_chromosomal_abnormality(lb, "DEL20Q", "_20", fixed_value_checks_csv_path)
+check_lb_chromosomal_abnormality(lb, "CTA_3KM", "_21", fixed_value_checks_csv_path)
+check_lb_chromosomal_abnormality(lb, "OTHCHALT", "_22", fixed_value_checks_csv_path)
+check_lb_chromosomal_abnormality(lb, "IDICXQ13", "_23", fixed_value_checks_csv_path)
+check_lb_chromosomal_abnormality(lb, "INCDEL12", "_24", fixed_value_checks_csv_path)
+check_lb_chromosomal_abnormality(lb, "INCT5Q", "_25", fixed_value_checks_csv_path)
+check_lb_chromosomal_abnormality(lb, "INCDEL17", "_26", fixed_value_checks_csv_path)
+check_lb_chromosomal_abnormality(lb, "T3Q262MR", "_27", fixed_value_checks_csv_path)
+
+tmp_lb <- lb %>% filter(LBSPID == "screening_100" & LBTESTCD == "FLT3_TKD")
+target_lb_cols <- c("LBTEST", "LBCAT", "LBORRES", "LBSPEC", "LBDTC", "LBMETHOD")
+tmp_lb %>% check_required_vars(target_lb_cols, domain_name = "LB")
+target_lb_cols <- c("LBTEST", "LBCAT", "LBORRES", "LBSPEC", "LBMETHOD")
+suffix <- "_28"
+tmp_lb <- tmp_lb %>% rename_with(~ str_c(.x, suffix), all_of(target_lb_cols))
+str_c(target_lb_cols, suffix) %>%
+  walk(~ run_value_equals_checks_from_csv(tmp_lb, "LB", .x, fixed_value_checks_csv_path))
+
+tmp_lb <- lb %>% filter(LBSPID == "screening_100" & LBTESTCD == "FL3TKDSR")
+target_lb_cols <- c("LBTEST", "LBCAT", "LBMETHOD")
+suffix <- "_29"
+tmp_lb <- tmp_lb %>% rename_with(~ str_c(.x, suffix), all_of(target_lb_cols))
+str_c(target_lb_cols, suffix) %>%
+  walk(~ run_value_equals_checks_from_csv(tmp_lb, "LB", .x, fixed_value_checks_csv_path))
+tmp_lb_not_done <- tmp_lb %>% filter(LBSTAT == "NOT DONE")
+target_lb_cols <- c("LBREASND")
+tmp_lb_not_done <- tmp_lb_not_done %>% rename_with(~ str_c(.x, suffix), all_of(target_lb_cols))
+str_c(target_lb_cols, suffix) %>%
+  walk(~ run_value_equals_checks_from_csv(tmp_lb_not_done, "LB", .x, fixed_value_checks_csv_path))
+tmp_lb_done <- tmp_lb %>% filter(LBSTAT != "NOT DONE")
+tmp_lb_2 <- lb %>% filter(LBSPID == "screening_100" & LBTESTCD == "FLT3_TKD" & LBORRES == "POSITIVE") %>% select("USUBJID")
+tmp_lb <- tmp_lb_done %>% inner_join(tmp_lb_2, by="USUBJID")
+c("LBORRES", "LBDTC") %>% check_required_vars(tmp_lb, ., domain_name = "LB")
+
+# MH
+tmp_mh <- mh %>% filter(MHSPID == "screening_100")
+tmp_mh <- tmp_mh %>% filter(MHTERM == "Acute myeloid leukaemia")
+tmp_mh %>% check_required_vars(c("MHTERM","MHSTDTC"), domain_name = "MH")
+target_mh_cols <- c("MHCAT", "MHPRESP", "MHOCCUR")
+suffix <- "_1"
+tmp_mh <- tmp_mh %>% rename_with(~ str_c(.x, suffix), all_of(target_mh_cols))
+str_c(target_mh_cols, suffix) %>%
+  walk(~ run_value_equals_checks_from_csv(tmp_mh, "MH", .x, fixed_value_checks_csv_path))
+
+tmp_mh <- mh %>% filter(MHSPID == "screening_100")
+tmp_mh <- tmp_mh %>% filter(MHTERM != "Acute myeloid leukaemia")
+tmp_mh %>% check_required_vars(c("MHTERM", "MHCAT", "MHSCAT", "MHENRTPT", "MHENTPT"), domain_name = "MH")
+target_mh_cols <- c("MHCAT", "MHSCAT", "MHENRTPT", "MHENTPT")
+suffix <- "_2"
+tmp_mh <- tmp_mh %>% rename_with(~ str_c(.x, suffix), all_of(target_mh_cols))
+str_c(target_mh_cols, suffix) %>%
+  walk(~ run_value_equals_checks_from_csv(tmp_mh, "MH", .x, fixed_value_checks_csv_path))
+
+# MI
+target_mi_cols <- c("MITESTCD", "MITEST", "MICAT", "MIORRES", "MIENRTPT", "MIENTPT")
+mi %>% check_required_vars(target_mi_cols, domain_name = "MH")
+target_mi_cols %>%
+  walk(~ run_value_equals_checks_from_csv(mi, "MI", .x, fixed_value_checks_csv_path))
+# RS
+target_rs_cols <- c("RSORRES", "RSTEST", "RSCAT")
+rs %>% check_required_vars(target_rs_cols, domain_name = "RS")
+tmp_rs <- rs %>% filter(RSTESTCD == "ETIOCLN")
+suffix <- "_1"
+tmp_rs <- tmp_rs %>% rename_with(~ str_c(.x, suffix), all_of(target_rs_cols))
+str_c(target_rs_cols, suffix) %>%
+  walk(~ run_value_equals_checks_from_csv(tmp_rs, "RS", .x, fixed_value_checks_csv_path))
+
