@@ -762,7 +762,12 @@ function populateDrugFields(data, spec, drugVars, whoDrugIdf) {
       let fixedName = null;
       if (defaultValues.length === 1 && /^[0-9]+$/.test(defaultValues[0])) {
         const hit = whoDrugIdf.find((r) => r.drug_code === defaultValues[0] && r.full_name_en != null);
-        if (hit) fixedName = hit.full_name_en;
+        if (hit) {
+          fixedName = hit.full_name_en;
+        } else {
+          const genericHit = whoDrugIdf.find((r) => r.drug_code === defaultValues[0] && r.generic_name_en != null);
+          if (genericHit) fixedName = genericHit.generic_name_en;
+        }
       }
       targetRows.forEach((row) => {
         row[varName] = fixedName != null ? fixedName : sampleOne(drugNames);
@@ -1529,7 +1534,12 @@ function buildRepeatedDomain(dm, spec, prefix, registrationStartDate, meddraData
         let fixedName = null;
         if (dv != null && /^[0-9]+$/.test(dv) && whoDrugIdf) {
           const hit = whoDrugIdf.find((r) => r.drug_code === dv && r.full_name_en != null);
-          if (hit) fixedName = hit.full_name_en;
+          if (hit) {
+            fixedName = hit.full_name_en;
+          } else {
+            const genericHit = whoDrugIdf.find((r) => r.drug_code === dv && r.generic_name_en != null);
+            if (genericHit) fixedName = genericHit.generic_name_en;
+          }
         }
         if (fixedName != null) {
           rows.forEach((row) => {

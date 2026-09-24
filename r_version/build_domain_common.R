@@ -1290,7 +1290,9 @@ populate_drug_fields <- function(data, spec, drug_vars, who_drug_idf) {
       }
       default_value <- drug_spec_rows %>% filter(alias_name == an) %>% pull(default_value) %>% discard(~ is.na(.x) | .x == "") %>% unique()
       fixed_name <- if (length(default_value) == 1 && str_detect(default_value, "^[0-9]+$")) {
-        who_drug_idf %>% filter(drug_code == default_value) %>% pull(full_name_en) %>% discard(is.na) %>% unique()
+        matched_drug <- who_drug_idf %>% filter(drug_code == default_value)
+        full_name <- matched_drug %>% pull(full_name_en) %>% discard(is.na) %>% unique()
+        if (length(full_name) >= 1) full_name else matched_drug %>% pull(generic_name_en) %>% discard(is.na) %>% unique()
       } else {
         character(0)
       }
@@ -2309,7 +2311,9 @@ build_repeated_domain <- function(dm, spec, prefix, registration_start_date, med
         } else if (ft == "drug") {
           dv <- default_value[1]
           fixed_name <- if (!is.na(dv) && str_detect(dv, "^[0-9]+$")) {
-            who_drug_idf %>% filter(drug_code == dv) %>% pull(full_name_en) %>% discard(is.na) %>% unique()
+            matched_drug <- who_drug_idf %>% filter(drug_code == dv)
+            full_name <- matched_drug %>% pull(full_name_en) %>% discard(is.na) %>% unique()
+            if (length(full_name) >= 1) full_name else matched_drug %>% pull(generic_name_en) %>% discard(is.na) %>% unique()
           } else {
             character(0)
           }
@@ -2595,7 +2599,9 @@ populate_linked_blocks <- function(data, cdisc_variable_values, exclude_prefix, 
         } else if (ft == "drug") {
           dv <- default_value[1]
           fixed_name <- if (!is.na(dv) && str_detect(dv, "^[0-9]+$")) {
-            who_drug_idf %>% filter(drug_code == dv) %>% pull(full_name_en) %>% discard(is.na) %>% unique()
+            matched_drug <- who_drug_idf %>% filter(drug_code == dv)
+            full_name <- matched_drug %>% pull(full_name_en) %>% discard(is.na) %>% unique()
+            if (length(full_name) >= 1) full_name else matched_drug %>% pull(generic_name_en) %>% discard(is.na) %>% unique()
           } else {
             character(0)
           }
