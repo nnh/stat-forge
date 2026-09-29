@@ -116,7 +116,16 @@ extract_date_cross_ref_offset_days <- function(validator_type, value) {
 # フィールド名と値の一覧を返す。値は'X'/"X"のように引用符(シングル・ダブルどちらも)付きの場合と、
 # 2 のように引用符無しの数値/文字列の場合の両方に対応する。
 # 異なるフィールドが混ざる場合やパースできない断片があればNULL(未対応)
+# "&&"を含む値(例: "field104=='POSITIVE'&&STAT.blank?")は"&&"で組み合わさった条件
+# (build_generation_constraints.R側のand_presence_conditionsで処理する)であり、ここでの単純な
+# "||"分割の対象ではない。ガードが無いと、"||"が無いために値全体が1個の断片として扱われ、
+# 最後の代替パターン([^\\s]+)が空白を含まない文字列全体に貪欲マッチしてしまい、クォートや
+# "&&"以降を含む壊れた値(例: "'POSITIVE'&&STAT.blank?")がそのままexpected_valueとして
+# 登録されるバグになる
 parse_presence_or_conditions <- function(value) {
+  if (str_detect(value, fixed("&&"))) {
+    return(NULL)
+  }
   fragments <- value %>% str_split("\\|\\|") %>% pluck(1) %>% str_trim()
   m <- str_match(fragments, "^(?:field|f)([0-9]+)\\s*==\\s*(?:'([^']*)'|\"([^\"]*)\"|([^\\s]+))$")
   if (any(is.na(m[, 1]))) {
@@ -275,6 +284,39 @@ parse_age_ref_condition <- function(value) {
   )
 }
 
+# age(ref('sheet1', N1), ref('sheet2', N2)) OP1 X || age(ref('sheet1', N1), ref('sheet2', N2)) OP2 Y
+# のような、同じ2フィールドに対するage()比較を"||"で2つ組み合わせた条件(validate_presence_if。
+# 「範囲外のときだけ必須」パターン、例: age(...)<18 || age(...)>=65 = 18歳未満または65歳以上のときだけ必須)を
+# 解釈する。2つの断片が同じref1/ref2(alias_name+field番号)を参照しており、演算子が下限側(</<=)と
+# 上限側(>/>=)の組み合わせ(順不同)である場合だけ対応する。それ以外(3つ以上への分割、参照先不一致、
+# 演算子が同じ側同士等)はNULL(未対応)
+parse_age_ref_or_condition <- function(value) {
+  clauses <- value %>% str_split("\\|\\|") %>% pluck(1) %>% str_trim()
+  if (length(clauses) != 2) {
+    return(NULL)
+  }
+  m <- str_match(clauses, age_ref_condition_pattern)
+  if (any(is.na(m[, 1]))) {
+    return(NULL)
+  }
+  ref_pairs <- str_c(m[, 2], "-", m[, 3], "-", m[, 4], "-", m[, 5])
+  if (length(unique(ref_pairs)) != 1) {
+    return(NULL)
+  }
+  operators <- m[, 6]
+  thresholds <- as.numeric(m[, 7])
+  lower_idx <- which(operators %in% c("<", "<="))
+  upper_idx <- which(operators %in% c(">", ">="))
+  if (length(lower_idx) != 1 || length(upper_idx) != 1) {
+    return(NULL)
+  }
+  list(
+    ref1_alias_name = m[1, 2], ref1_field = str_c("field", m[1, 3]),
+    ref2_alias_name = m[1, 4], ref2_field = str_c("field", m[1, 5]),
+    min_age = thresholds[lower_idx], max_age = thresholds[upper_idx]
+  )
+}
+
 # validator_type=="formula" & validator_key=="validate_formula_if"の場合、
 # 上記のage()条件から、自分自身(field_name)以外のもう一方のフィールド(参照先の日付)と下限/上限年齢を取り出す。
 # field_nameがage()の2引数のどちらとも一致しない場合はNULL(未対応)
@@ -334,6 +376,11 @@ and_field_equality_pattern <- "^(?:field|f)([0-9]+)\\s*==\\s*(?:field|f)([0-9]+)
 # fieldN>=数値(または fN>=数値)のように、同一シート内の別フィールドの値を数値として不等号比較する形。
 # 例: "f16>=2&&STAT.blank?"(骨壊死のGrade(field16)が2以上のときだけ、かつSTATが空欄のときだけ提示)
 and_field_numeric_cmp_pattern <- "^(?:field|f)([0-9]+)\\s*(>=|<=|>|<)\\s*(-?[0-9]+(?:\\.[0-9]+)?)$"
+# "STAT == 'NOT DONE'"のように、フィールド番号ではなく接尾辞名(cdisc_variableからprefixを除いた部分。
+# presence_predicate_patternの".blank?/.present?"と同じ命名規則)で同じブロック内の別フィールドを参照し、
+# 特定の値と等しいことを条件にする形。"field"/"f"+数字で始まる場合はand_field_ref_pattern等の
+# フィールド番号参照として先に判定されるため、ここに来るのは数字以外の識別子のみ
+and_field_name_ref_pattern <- "^([A-Za-z_][A-Za-z0-9_]*)\\s*==\\s*(?:'([^']*)'|\"([^\"]*)\"|([^\\s|&()]+))$"
 
 # parse_and_clauses()で分割した1断片を種類ごとに分類する。対応する断片:
 #   - "STAT.blank?"/"STAT.present?"のような接尾辞述語 -> kind="predicate"
@@ -342,6 +389,7 @@ and_field_numeric_cmp_pattern <- "^(?:field|f)([0-9]+)\\s*(>=|<=|>|<)\\s*(-?[0-9
 #     (別のcopy機構(extract_field_equality_ref)で扱われるため、ここではpresence_conditions行を作らない)
 #   - "fieldN=='値'"のような同一シート内の別フィールド参照 -> kind="field_ref"
 #   - "fieldN>=数値"のような、同一シート内の別フィールドの値との数値不等号比較 -> kind="field_numeric_cmp"
+#   - "STAT=='値'"のような、フィールド番号ではなく接尾辞名での同一ブロック内別フィールド参照 -> kind="field_name_ref"
 #   - "fieldN==2 || fieldN==3 || ..."のような、断片自体が同一フィールドに対するOR条件
 #     (例: (field22==2||field22==3||...) && (field348=='CR'||field348=='PR'))
 #     -> kind="field_ref_or"(parse_presence_or_conditions()を再利用し、複数のexpected_valueを持つ)
@@ -371,6 +419,10 @@ classify_and_clause <- function(clause) {
   m_num <- str_match(clause, and_field_numeric_cmp_pattern)
   if (!is.na(m_num[1, 1])) {
     return(list(kind = "field_numeric_cmp", ref_field = str_c("field", m_num[1, 2]), operator = m_num[1, 3], threshold = as.numeric(m_num[1, 4])))
+  }
+  m_name <- str_match(clause, and_field_name_ref_pattern)
+  if (!is.na(m_name[1, 1])) {
+    return(list(kind = "field_name_ref", suffix = m_name[1, 2], value = coalesce(m_name[1, 3], m_name[1, 4], m_name[1, 5])))
   }
   or_parsed <- parse_presence_or_conditions(clause)
   if (!is.null(or_parsed)) {

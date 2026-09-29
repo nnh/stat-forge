@@ -15,13 +15,26 @@ build_ds_domain <- function(dm, cdisc_variable_values) {
   # 参照する場合、inject_cross_domain_refs()がそのインスタンスを正しく特定できるようにするため。
   # 最終的な出力からは、load_edc_spec.R側で他ドメイン生成に使い終わった後に取り除く)
   if ("DSEPOCH" %in% ds_spec[["cdisc_variable"]]) {
-    epoch_table <- ds_spec %>%
-      filter(cdisc_variable == "DSEPOCH") %>%
-      distinct(alias_name, label, default_value, sheet_seq) %>%
+    epoch_spec <- ds_spec %>% filter(cdisc_variable == "DSEPOCH")
+    epoch_table <- epoch_spec %>%
+      distinct(alias_name, label, default_value, sheet_seq, is_invisible) %>%
       arrange(sheet_seq)
+    # is_invisible==FALSE(実際にユーザーが選択する項目)かつ選択肢(code)が複数あるDSEPOCHは、
+    # 通常のradio_button項目と同様、選択肢からcoverageサンプリングして被験者ごとに割り振る
+    # (例: withdrawalシートの「中止(完了)した時期」はSCREENING/FOLLOW-UPの選択式)。
+    # それ以外(is_invisible==TRUEの隠しフィールド、または選択肢が1つ以下)は、従来通り
+    # default_valueをそのブロックの全被験者に一律適用する(シートの区分を表す固定識別子として使う)
+    epoch_codes <- epoch_spec %>% filter(!is.na(code)) %>% distinct(alias_name, label, code)
     ds <- epoch_table %>%
-      pmap_dfr(function(alias_name, label, default_value, sheet_seq) {
-        dm %>% select(USUBJID, STUDYID) %>% mutate(EPOCH = default_value, DSSPID = alias_name, alias_name = alias_name, label = label, sheet_seq = sheet_seq)
+      pmap_dfr(function(alias_name, label, default_value, sheet_seq, is_invisible) {
+        n <- nrow(dm)
+        choices <- epoch_codes %>% filter(alias_name == !!alias_name, label == !!label) %>% pull(code)
+        epoch_values <- if (!is_invisible && length(choices) > 1) {
+          sample_values_with_coverage(choices, n)
+        } else {
+          rep(default_value, n)
+        }
+        dm %>% select(USUBJID, STUDYID) %>% mutate(EPOCH = epoch_values, DSSPID = alias_name, alias_name = alias_name, label = label, sheet_seq = sheet_seq)
       })
   } else {
     ds <- dm %>% select(USUBJID, STUDYID)
@@ -75,14 +88,19 @@ populate_ds_domain <- function(ds, cdisc_variable_values, registration_start_dat
   date_injected <- inject_cross_domain_refs(ds, NULL, NULL, built_domains, cdisc_variable_to_prefix, NULL, ds_date_ref_bounds)
   ds <- date_injected[["data"]]
 
+  # DSの日付(中止日・脱落日等)がDMのRFICDTC(同意取得日)・BRTHDTC(生年月日)より前にならないよう、
+  # 被験者ごとの下限を一時列として持たせる(populate_date_fields()のrow_lower_bound_col)
+  ds_lower_col <- ".ds_date_lower_bound"
+  ds <- add_subject_lower_bound_col(ds, built_domains[["DM"]], ds_lower_col)
+
   ds <- ds %>%
     populate_radio_button_fields(ds_spec, target_vars, numeric_bounds) %>%
-    populate_date_fields(ds_spec, target_vars, registration_start_date, date_ref_bounds) %>%
+    populate_date_fields(ds_spec, target_vars, registration_start_date, date_ref_bounds, row_lower_bound_col = ds_lower_col) %>%
     # DSが複数のalias(シート、例: "discon"/"withdrawal")にまたがる場合、シートの本来の並び順
     # (sheet_seq)に沿うようalias単位でまとめて日付をシフトする
     reorder_dates_by_sheet_seq(ds_date_vars, ds_spec, registration_start_date, date_ref_bounds = ds_date_ref_bounds) %>%
     populate_dummy_fields(target_vars) %>%
-    select(-any_of(date_injected[["injected_cols"]]))
+    select(-any_of(c(date_injected[["injected_cols"]], ds_lower_col)))
 
   # DSSEQはUSUBJID・DSSTDTC・sheet_seq(シートの本来の並び順)の昇順で振る
   ds <- ds %>% sort_ds_for_seq() %>% add_seq("DSSEQ")

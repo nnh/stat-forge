@@ -229,7 +229,24 @@ resolve_date_ref_bound_vals <- function(data, date_ref_bounds, var_name, bound_t
 # 定義しているalias_nameが違えば日付を入れず、そのcdisc_variableを実際に定義しているalias_nameの
 # 行だけに絞って生成する(例: CMドメインで"concomitant_drug"にしか無いCMSTDTCが、
 # それを定義していない"baseline1"の行にまで入ってしまうのを防ぐ)
-populate_date_fields <- function(data, spec, target_vars, registration_start_date, date_ref_bounds = NULL, existing_data = NULL) {
+# dm(RFICDTC/BRTHDTC)から、被験者ごとの日付生成の下限(RFICDTC(同意取得日)とBRTHDTC(生年月日)の遅い方)を
+# 一時列としてdataに結合する。populate_date_fields()のrow_lower_bound_colに渡す。DS/AE等、同意取得前・
+# 出生前の日付になってはならないドメインの日付生成で使う。dmが無い場合は何もしない
+add_subject_lower_bound_col <- function(data, dm, col_name) {
+  if (is.null(dm)) {
+    return(data)
+  }
+  dm_lower <- dm %>%
+    transmute(USUBJID, lower_bound = pmax(
+      if ("RFICDTC" %in% colnames(dm)) as.Date(RFICDTC) else as.Date(NA),
+      if ("BRTHDTC" %in% colnames(dm)) as.Date(BRTHDTC) else as.Date(NA),
+      na.rm = TRUE
+    ))
+  data[[col_name]] <- as.character(dm_lower[["lower_bound"]][match(data[["USUBJID"]], dm_lower[["USUBJID"]])])
+  data
+}
+
+populate_date_fields <- function(data, spec, target_vars, registration_start_date, date_ref_bounds = NULL, existing_data = NULL, row_lower_bound_col = NULL) {
   date_vars <- spec %>%
     filter(field_type == "date") %>%
     pull(cdisc_variable) %>%
@@ -262,11 +279,18 @@ populate_date_fields <- function(data, spec, target_vars, registration_start_dat
   # 下限を「登録開始日とBRTHDTCの遅い方」にする(小児等でBRTHDTCが登録開始日より後になる場合、
   # 「生まれる前に同意している」といった矛盾が生じるのを防ぐ)。generate_random_date()の
   # start_date引数は列名の文字列も受け付けるため、計算結果を一時列として持たせて渡す
+  # row_lower_bound_col(行ごとの追加の下限を持つ列名。例: DSの中止日等が同意取得日より前にならないようにする
+  # ためのRFICDTC由来の列)が指定された場合も、同じ一時列に含めて下限とする
   has_brthdtc <- "BRTHDTC" %in% colnames(data)
-  if (has_brthdtc) {
-    data[["__date_lower_bound"]] <- as.character(pmax(as.Date(registration_start_date), as.Date(data[["BRTHDTC"]]), na.rm = TRUE))
+  has_row_lower <- !is.null(row_lower_bound_col) && row_lower_bound_col %in% colnames(data)
+  has_lower_col <- has_brthdtc || has_row_lower
+  if (has_lower_col) {
+    lower_base <- rep(as.Date(registration_start_date), nrow(data))
+    if (has_brthdtc) lower_base <- pmax(lower_base, as.Date(data[["BRTHDTC"]]), na.rm = TRUE)
+    if (has_row_lower) lower_base <- pmax(lower_base, as.Date(data[[row_lower_bound_col]]), na.rm = TRUE)
+    data[["__date_lower_bound"]] <- as.character(lower_base)
   }
-  start_bound <- if (has_brthdtc) "__date_lower_bound" else registration_start_date
+  start_bound <- if (has_lower_col) "__date_lower_bound" else registration_start_date
   # RFSTDTC(症例登録日、他ドメインではinject_cross_domain_refs等で結合されている場合がある)は、
   # 明示的なref()参照(min_ref_vals)を持たない変数だけのデフォルト下限として使う(下のループ内)。
   # min_ref_vals(例: MHSTDTCのBRTHDTC基準)がある変数にまで一律にRFSTDTCを加えると、
@@ -323,7 +347,7 @@ populate_date_fields <- function(data, spec, target_vars, registration_start_dat
     }
   }
 
-  if (has_brthdtc) {
+  if (has_lower_col) {
     data[["__date_lower_bound"]] <- NULL
   }
   data <- data %>% select(-starts_with("__date_lower_bound__"), -starts_with("__date_upper_bound__"))
@@ -341,11 +365,50 @@ populate_dose_fields <- function(data, target_vars) {
   data
 }
 
-# 上記のいずれでも埋まらなかった対象変数はとりあえずダミー値を格納
-populate_dummy_fields <- function(data, target_vars) {
+# field_numeric_bounds(alias_name, label単位のcdisc_variable別min/max)から、指定した(alias_name, label,
+# cdisc_variable)のmin/maxを返す。無ければNULL。label=NULLの場合はlabelを問わず最初に見つかったものを返す。
+# DUMMY値になるはずだったtext型の数値項目(例: 分割数のPRDOSFRQ)を数値にするために使う
+lookup_field_numeric_bound <- function(field_numeric_bounds, alias_name_val, var_name, label_val = NULL, use_label = FALSE) {
+  if (is.null(field_numeric_bounds) || nrow(field_numeric_bounds) == 0) {
+    return(NULL)
+  }
+  matched <- field_numeric_bounds %>% filter(alias_name == alias_name_val, cdisc_variable == var_name)
+  if (use_label) {
+    matched <- matched %>% filter((is.na(label) & is.na(label_val)) | (!is.na(label) & !is.na(label_val) & label == label_val))
+  }
+  if (nrow(matched) == 0) {
+    return(NULL)
+  }
+  list(min_value = matched[["min_value"]][1], max_value = matched[["max_value"]][1])
+}
+
+# 数値バリデーション(min/max)を持つtext型項目に入れる整数値をn個返す。下限が無い場合は0、上限が無い場合は
+# 下限+10とする(下限が上限を超える場合は下限を上限に合わせる)
+generate_numeric_text_values <- function(bound, n) {
+  lo <- if (is.na(bound[["min_value"]])) 0 else bound[["min_value"]]
+  hi <- if (is.na(bound[["max_value"]])) lo + 10 else bound[["max_value"]]
+  if (lo > hi) lo <- hi
+  lo_int <- ceiling(lo)
+  hi_int <- floor(hi)
+  values <- if (lo_int > hi_int) rep(round(lo), n) else lo_int + floor(runif(n, 0, hi_int - lo_int + 1))
+  format(values, scientific = FALSE, trim = TRUE)
+}
+
+# 上記のいずれでも埋まらなかった対象変数はとりあえずダミー値を格納。field_numeric_boundsに数値バリデーションが
+# あるalias_nameの項目は、DUMMYではなくその範囲内の整数にする
+populate_dummy_fields <- function(data, target_vars, field_numeric_bounds = NULL) {
   remaining_vars <- setdiff(target_vars, colnames(data))
   for (var_name in remaining_vars) {
     data[[var_name]] <- "DUMMY"
+    if (!is.null(field_numeric_bounds) && "alias_name" %in% colnames(data)) {
+      for (alias_val in unique(data[["alias_name"]])) {
+        bound <- lookup_field_numeric_bound(field_numeric_bounds, alias_val, var_name)
+        if (!is.null(bound)) {
+          rows <- which(data[["alias_name"]] == alias_val)
+          data[[var_name]][rows] <- generate_numeric_text_values(bound, length(rows))
+        }
+      }
+    }
   }
   data
 }
@@ -525,7 +588,7 @@ apply_presence_conditions <- function(data, presence_conditions, cdisc_variable_
     applicable[["ref2_label"]] <- NA_character_
   }
   age_conditions <- applicable %>%
-    filter(condition_type %in% c("age_gt", "age_ge", "age_lt", "age_le"), ref2_cdisc_variable %in% colnames(data)) %>%
+    filter(condition_type %in% c("age_gt", "age_ge", "age_lt", "age_le", "age_outside"), ref2_cdisc_variable %in% colnames(data)) %>%
     distinct(cdisc_variable, ref_cdisc_variable, ref_alias_name, ref_label, ref2_cdisc_variable, ref2_alias_name, ref2_label, alias_name, label, condition_type, expected_value)
   for (i in seq_len(nrow(age_conditions))) {
     var_name <- age_conditions[["cdisc_variable"]][i]
@@ -538,19 +601,28 @@ apply_presence_conditions <- function(data, presence_conditions, cdisc_variable_
     ref2_label_i <- age_conditions[["ref2_label"]][i]
     ref2_alias_name_i <- age_conditions[["ref2_alias_name"]][i]
     op <- age_conditions[["condition_type"]][i]
-    threshold <- suppressWarnings(as.numeric(age_conditions[["expected_value"]][i]))
 
     target_rows <- own_target_rows(own_alias_name, own_label)
     date1 <- as.Date(resolve_ref_vals(ref_var, ref_alias_name_i, ref_label_i, own_alias_name, own_label))
     date2 <- as.Date(resolve_ref_vals(ref2_var, ref2_alias_name_i, ref2_label_i, own_alias_name, own_label))
     age_years <- as.numeric(date1 - date2) / 365.25
-    satisfied <- switch(op,
-      age_gt = age_years > threshold,
-      age_ge = age_years >= threshold,
-      age_lt = age_years < threshold,
-      age_le = age_years <= threshold,
-      rep(NA, length(age_years))
-    )
+    if (op == "age_outside") {
+      # age(...)<min_age || age(...)>=max_age (範囲外のときだけ必須)。expected_valueに
+      # "min_age,max_age"の形で詰めてある(build_generation_constraints.Rのparse_age_ref_or_condition参照)
+      bounds <- suppressWarnings(as.numeric(str_split(age_conditions[["expected_value"]][i], ",")[[1]]))
+      min_age <- bounds[1]
+      max_age <- bounds[2]
+      satisfied <- age_years < min_age | age_years >= max_age
+    } else {
+      threshold <- suppressWarnings(as.numeric(age_conditions[["expected_value"]][i]))
+      satisfied <- switch(op,
+        age_gt = age_years > threshold,
+        age_ge = age_years >= threshold,
+        age_lt = age_years < threshold,
+        age_le = age_years <= threshold,
+        rep(NA, length(age_years))
+      )
+    }
     satisfied[is.na(satisfied)] <- FALSE
     mismatch <- target_rows & !satisfied
     data[[var_name]][mismatch] <- NA
@@ -864,6 +936,69 @@ generate_orres_value <- function(testcd, testcd_bounds) {
     value[!has_bound] <- sample(0:100, sum(!has_bound), replace = TRUE)
   }
   value
+}
+
+# DOSE(用量)項目を、EDC仕様の数値バリデーション(min/max)に基づいたそれらしい数値に置き換える。
+# populate_dose_fields()/build_repeated_domain()側のDOSE生成は、変数名が"DOSE"で終わることだけを
+# 条件にハードコードされた候補値(50〜500)から選ぶため、その項目本来の範囲を超えることがある
+# (例: PRDOSE=照射線量は仕様上1〜30Gyだが、CM向けの候補値がそのまま使われてしまう)。
+# LB/TR/VS/FAのORRES同様、TESTCDの代わりにTRT(例: CMTRT/PRTRT)をキーにして範囲を引く
+
+# field_numeric_boundsをtrt_varの値をキーにした対応表に変換する。build_testcd_numeric_boundsと
+# 同じ考え方だが、trt_varがfield_type=="drug"の場合、cdisc_variable_valuesのdefault_valueは
+# WHO Drugコードであり実際のデータ列にはその薬剤名(full_name_en、無ければgeneric_name_enへの
+# フォールバック名)が入るため、マップの鍵として使う前にwho_drug_idfで解決する
+build_trt_numeric_bounds <- function(cdisc_variable_values, field_numeric_bounds, trt_var, dose_var, who_drug_idf) {
+  trt_rows <- cdisc_variable_values %>% filter(cdisc_variable == trt_var, !is.na(default_value), default_value != "")
+  trt_rows[["trt_value"]] <- trt_rows[["default_value"]]
+  is_drug_code <- trt_rows[["field_type"]] == "drug" & str_detect(trt_rows[["default_value"]], "^[0-9]+$")
+  if (any(is_drug_code) && !is.null(who_drug_idf)) {
+    codes <- trt_rows[["default_value"]][is_drug_code]
+    resolved <- codes %>% map_chr(function(code) {
+      matched_drug <- who_drug_idf %>% filter(drug_code == code)
+      full_name <- matched_drug %>% pull(full_name_en) %>% discard(is.na) %>% unique()
+      if (length(full_name) >= 1) {
+        full_name[1]
+      } else {
+        generic_name <- matched_drug %>% pull(generic_name_en) %>% discard(is.na) %>% unique()
+        if (length(generic_name) >= 1) generic_name[1] else code
+      }
+    })
+    trt_rows[["trt_value"]][is_drug_code] <- resolved
+  }
+  trt_map <- trt_rows %>% distinct(alias_name, label, trt = trt_value)
+  field_numeric_bounds %>%
+    filter(cdisc_variable == dose_var) %>%
+    inner_join(trt_map, by = c("alias_name", "label")) %>%
+    distinct(trt, min_value, max_value)
+}
+
+# dataの中から"*DOSE"列を持ち、対応する"*TRT"列(DOSEをTRTに置き換えた変数名。例: CMDOSE→CMTRT)も
+# 持つものだけを対象に、行のTRT値に対応する範囲を外れているDOSE値だけを生成し直す。TRTに対応する
+# 範囲が定義されていない場合、およびtrt_var列自体が無いdose_varは対象外(元の値のまま)とする
+populate_dose_realism <- function(data, cdisc_variable_values, field_numeric_bounds, who_drug_idf) {
+  if (is.null(data) || nrow(data) == 0) {
+    return(data)
+  }
+  dose_vars <- colnames(data)[str_detect(colnames(data), "DOSE$")]
+  for (dose_var in dose_vars) {
+    trt_var <- str_replace(dose_var, "DOSE$", "TRT")
+    if (!(trt_var %in% colnames(data))) next
+    trt_bounds <- build_trt_numeric_bounds(cdisc_variable_values, field_numeric_bounds, trt_var, dose_var, who_drug_idf)
+    if (nrow(trt_bounds) == 0) next
+    bound_idx <- match(data[[trt_var]], trt_bounds[["trt"]])
+    current <- suppressWarnings(as.numeric(data[[dose_var]]))
+    min_v <- trt_bounds[["min_value"]][bound_idx]
+    max_v <- trt_bounds[["max_value"]][bound_idx]
+    needs_regen <- !is.na(bound_idx) & !is.na(data[[dose_var]]) & data[[dose_var]] != "" &
+      (is.na(current) | (!is.na(min_v) & current < min_v) | (!is.na(max_v) & current > max_v))
+    if (any(needs_regen)) {
+      lo <- coalesce(min_v[needs_regen], 0)
+      hi <- coalesce(max_v[needs_regen], lo + 100)
+      data[[dose_var]][needs_regen] <- as.character(round(runif(sum(needs_regen), lo, hi)))
+    }
+  }
+  data
 }
 
 # presence_conditions/field_ref_boundsのうち、cdisc_variableとref_cdisc_variableのprefixが異なる
@@ -1281,7 +1416,9 @@ populate_drug_fields <- function(data, spec, drug_vars, who_drug_idf) {
       }
       default_value <- drug_spec_rows %>% filter(alias_name == an) %>% pull(default_value) %>% discard(~ is.na(.x) | .x == "") %>% unique()
       fixed_name <- if (length(default_value) == 1 && str_detect(default_value, "^[0-9]+$")) {
-        who_drug_idf %>% filter(drug_code == default_value) %>% pull(full_name_en) %>% discard(is.na) %>% unique()
+        matched_drug <- who_drug_idf %>% filter(drug_code == default_value)
+        full_name <- matched_drug %>% pull(full_name_en) %>% discard(is.na) %>% unique()
+        if (length(full_name) >= 1) full_name else matched_drug %>% pull(generic_name_en) %>% discard(is.na) %>% unique()
       } else {
         character(0)
       }
@@ -1586,6 +1723,10 @@ reorder_dates_by_sheet_seq <- function(data, date_vars, cdisc_variable_values, r
     }
     new_dates <- as.Date(data[[var_name]][has_val]) + data[["delta"]][has_val]
     new_dates <- pmin(pmax(new_dates, row_lower_bound[has_val]), row_upper_bound[has_val])
+    # 中止日(row_upper_bound)がBRTHDTCより前という矛盾したデータでも、生物学的な下限であるBRTHDTCを優先する
+    if ("BRTHDTC" %in% colnames(data)) {
+      new_dates <- pmax(new_dates, as.Date(data[["BRTHDTC"]][has_val]), na.rm = TRUE)
+    }
     data[[var_name]][has_val] <- as.character(new_dates)
   }
 
@@ -1715,6 +1856,22 @@ clamp_dates_to_discontinuation <- function(data, date_vars, registration_start_d
       # 場合(例: 登録日が中止日より後という、この日付項目固有の参照とは無関係な実データ上の事情)は
       # 対象にせず、従来通りhard_upperまで切り詰める
       has_min_ref <- if (!is.null(min_ref_vals)) !is.na(min_ref_vals[over]) else rep(FALSE, sum(over))
+      # 中止日が理由で有効範囲が消えている行(後療法等、参照先の日付(lowerの根拠)自体が既に
+      # 被験者の中止日より後になっているケース)は、その項目が中止後に妥当に発生しうることを意味する
+      # だけで、本当に無効な範囲というわけではない。中止日による上限を外し、代わりに「今日」
+      # (max_ref_valsがあればそちらも考慮)を上限として救済を試みる。中止日を外しても尚範囲が無い
+      # 場合のみ、以降のinfeasible判定で従来通り未入力(NA)にする
+      rescued <- rep(FALSE, sum(over))
+      narrowed_by_discon <- (hard_upper < lower) & has_min_ref & !is.na(discon_over_vals)
+      if (any(narrowed_by_discon)) {
+        hard_upper_no_discon <- rep(as.Date(Sys.Date()), sum(over))
+        if (!is.null(max_ref_vals)) {
+          hard_upper_no_discon <- pmin(hard_upper_no_discon, max_ref_vals[over], na.rm = TRUE)
+        }
+        rescuable <- narrowed_by_discon & (hard_upper_no_discon >= lower)
+        hard_upper[rescuable] <- hard_upper_no_discon[rescuable]
+        rescued[rescuable] <- TRUE
+      }
       # 有効な日付範囲が存在しない行(オフセット付き参照の参照先が生成順序上まだ結合されておらず、
       # 生成時点では下限が緩く見えていたが、後段でクロスドメイン参照が解決されて厳しい下限が判明し、
       # それが今日/中止日を超えてしまった)は、無理に未来日等で上書きせず未入力(NA)に戻す。
@@ -1747,12 +1904,14 @@ clamp_dates_to_discontinuation <- function(data, date_vars, registration_start_d
         lower <- lower[!infeasible]
         hard_upper <- hard_upper[!infeasible]
         discon_over_vals <- discon_over_vals[!infeasible]
+        rescued <- rescued[!infeasible]
         over <- over & !infeasible_mask
       }
       if (length(lower) > 0) {
         # 通常のケース(有効な範囲は存在する): 上限はhard_upperを超えない範囲で、可能な限り既存値
-        # (current)を尊重する(discon超過のみが理由の場合、既存値に近い日付に再サンプルするため)
-        upper <- as.Date(ifelse(is.na(discon_over_vals), as.character(current[over]), as.character(hard_upper)))
+        # (current)を尊重する(discon超過のみが理由の場合、既存値に近い日付に再サンプルするため)。
+        # ただしrescuedな行は中止日制約そのものを外して救済しているため、既存値には寄せない
+        upper <- as.Date(ifelse(is.na(discon_over_vals) & !rescued, as.character(current[over]), as.character(hard_upper)))
         upper <- pmin(upper, hard_upper)
         upper <- pmax(upper, lower)
         new_dates <- lower + floor(runif(length(lower), 0, as.numeric(upper - lower) + 1))
@@ -1934,7 +2093,7 @@ inject_dm_rfstdtc <- function(data, built_domains) {
 # 列順整理などprefix全体に対して1回だけ行うべき処理をスキップし、alias_name列を保持したまま
 # (existing_dataと結合した)全行を返す。通常(wave分割しない場合)は両方とも既定値のままでよく、
 # 挙動は従来と完全に同じになる
-build_generic_domain <- function(dm, spec, prefix, registration_start_date, meddra, presence_conditions, required_var_instances = NULL, numeric_bounds = NULL, field_ref_bounds = NULL, add_coding_block = FALSE, built_domains = list(), cdisc_variable_to_prefix = NULL, age_bounds = NULL, multi_record_alias_names = character(0), who_drug_idf = NULL, active_sheet_table = NULL, visit_lookup = NULL, discontinuation_date = NULL, date_ref_bounds = NULL, is_exclusive = FALSE, existing_data = NULL, finalize = TRUE) {
+build_generic_domain <- function(dm, spec, prefix, registration_start_date, meddra, presence_conditions, required_var_instances = NULL, numeric_bounds = NULL, field_ref_bounds = NULL, add_coding_block = FALSE, built_domains = list(), cdisc_variable_to_prefix = NULL, age_bounds = NULL, multi_record_alias_names = character(0), who_drug_idf = NULL, active_sheet_table = NULL, visit_lookup = NULL, discontinuation_date = NULL, date_ref_bounds = NULL, is_exclusive = FALSE, existing_data = NULL, finalize = TRUE, field_numeric_bounds = NULL) {
   # presence_conditions/field_ref_bounds/age_bounds/date_ref_boundsは全ドメイン分を含む共通テーブルのため、
   # 同じref_cdisc_variableを別ドメインが別のlabelで参照しているとinject_cross_domain_refs()が混同してしまう。
   # このドメイン自身のcdisc_variableに関する行だけに絞ってから使う
@@ -1997,9 +2156,13 @@ build_generic_domain <- function(dm, spec, prefix, registration_start_date, medd
     left_join(dm %>% select(USUBJID, STUDYID), by = "USUBJID")
   data[["DOMAIN"]] <- prefix
 
+  # SUPPQUALはCDISC SDTM標準上SEQ/SPID変数を持たないため、他ドメインと違い付与しない
+  is_suppqual <- prefix == "SUPPQUAL"
   spid_var <- str_c(prefix, "SPID")
-  data[[spid_var]] <- data[["alias_name"]]
-  data <- data %>% apply_multi_record_spid(spid_var, multi_record_alias_names)
+  if (!is_suppqual) {
+    data[[spid_var]] <- data[["alias_name"]]
+    data <- data %>% apply_multi_record_spid(spid_var, multi_record_alias_names)
+  }
 
   target_vars <- compute_target_vars(data %>% select(-alias_name), spec)
   seq_var <- str_c(prefix, "SEQ")
@@ -2033,12 +2196,12 @@ build_generic_domain <- function(dm, spec, prefix, registration_start_date, medd
     # clampして修復する(discon_over判定は既に満たされているはずなので実質ref_violationのみ効く)
     clamp_dates_to_discontinuation(date_vars, registration_start_date, discontinuation_date, date_ref_bounds, existing_data, presence_conditions) %>%
     populate_dose_fields(target_vars) %>%
-    populate_dummy_fields(target_vars)
+    populate_dummy_fields(target_vars, field_numeric_bounds)
 
   # wave分割していない(existing_data無し)通常時は、従来通りここでDSSEQ相当の連番を振る。
   # wave分割時は、後段でexisting_data(前wave分)と結合してから、finalize=TRUEのタイミングで
-  # まとめて振る(通しの連番にするため)
-  if (is.null(existing_data)) {
+  # まとめて振る(通しの連番にするため)。SUPPQUALはSEQを持たないため対象外
+  if (is.null(existing_data) && !is_suppqual) {
     data <- data %>% add_seq(seq_var)
   }
 
@@ -2083,7 +2246,7 @@ build_generic_domain <- function(dm, spec, prefix, registration_start_date, medd
   # (existing_dataがNULLなら何もしない=従来通り)。まだfinalizeでなければ、次waveのexisting_dataとして
   # 使えるようalias_name列を保持したまま返す
   data <- bind_rows(existing_data, data)
-  if (!is.null(existing_data) && finalize) {
+  if (!is.null(existing_data) && finalize && !is_suppqual) {
     data <- data %>% add_seq(seq_var)
   }
   if (!finalize) {
@@ -2106,7 +2269,7 @@ build_generic_domain <- function(dm, spec, prefix, registration_start_date, medd
 # 値を生成する(対応するlabelが無ければNAのまま)。radio_button/date/meddra/dummyの基本パターンに対応
 # existing_data/finalizeの意味はbuild_generic_domain()と同じ(prefix単位では循環に見える依存関係を
 # 複数waveに分けて解決するため。通常は既定値のままでよく、挙動は従来と完全に同じになる)
-build_repeated_domain <- function(dm, spec, prefix, registration_start_date, meddra, presence_conditions, required_var_instances = NULL, add_coding_block = FALSE, built_domains = list(), cdisc_variable_to_prefix = NULL, age_bounds = NULL, multi_record_alias_names = character(0), who_drug_idf = NULL, active_sheet_table = NULL, visit_lookup = NULL, discontinuation_date = NULL, date_ref_bounds = NULL, existing_data = NULL, finalize = TRUE) {
+build_repeated_domain <- function(dm, spec, prefix, registration_start_date, meddra, presence_conditions, required_var_instances = NULL, add_coding_block = FALSE, built_domains = list(), cdisc_variable_to_prefix = NULL, age_bounds = NULL, multi_record_alias_names = character(0), who_drug_idf = NULL, active_sheet_table = NULL, visit_lookup = NULL, discontinuation_date = NULL, date_ref_bounds = NULL, existing_data = NULL, finalize = TRUE, field_numeric_bounds = NULL) {
   drug_names <- if (!is.null(who_drug_idf)) who_drug_idf[["full_name_en"]] %>% discard(is.na) %>% unique() else character(0)
   # presence_conditions/age_bounds/date_ref_boundsは全ドメイン分を含む共通テーブルのため、
   # 同じref_cdisc_variableを別ドメインが別のlabelで参照しているとinject_cross_domain_refs()が
@@ -2300,7 +2463,9 @@ build_repeated_domain <- function(dm, spec, prefix, registration_start_date, med
         } else if (ft == "drug") {
           dv <- default_value[1]
           fixed_name <- if (!is.na(dv) && str_detect(dv, "^[0-9]+$")) {
-            who_drug_idf %>% filter(drug_code == dv) %>% pull(full_name_en) %>% discard(is.na) %>% unique()
+            matched_drug <- who_drug_idf %>% filter(drug_code == dv)
+            full_name <- matched_drug %>% pull(full_name_en) %>% discard(is.na) %>% unique()
+            if (length(full_name) >= 1) full_name else matched_drug %>% pull(generic_name_en) %>% discard(is.na) %>% unique()
           } else {
             character(0)
           }
@@ -2314,7 +2479,9 @@ build_repeated_domain <- function(dm, spec, prefix, registration_start_date, med
         } else if (str_detect(var_name, "DOSE$")) {
           sample(dose_value_choices, nn, replace = TRUE)
         } else {
-          rep("DUMMY", nn)
+          # 数値バリデーション(min/max)を持つtext型項目(例: 分割数)は、DUMMYではなくその範囲内の整数にする
+          numeric_bound <- lookup_field_numeric_bound(field_numeric_bounds, alias_name[1], var_name, label[1], use_label = TRUE)
+          if (is.null(numeric_bound)) rep("DUMMY", nn) else generate_numeric_text_values(numeric_bound, nn)
         }
       }) %>%
       ungroup() %>%
@@ -2586,7 +2753,9 @@ populate_linked_blocks <- function(data, cdisc_variable_values, exclude_prefix, 
         } else if (ft == "drug") {
           dv <- default_value[1]
           fixed_name <- if (!is.na(dv) && str_detect(dv, "^[0-9]+$")) {
-            who_drug_idf %>% filter(drug_code == dv) %>% pull(full_name_en) %>% discard(is.na) %>% unique()
+            matched_drug <- who_drug_idf %>% filter(drug_code == dv)
+            full_name <- matched_drug %>% pull(full_name_en) %>% discard(is.na) %>% unique()
+            if (length(full_name) >= 1) full_name else matched_drug %>% pull(generic_name_en) %>% discard(is.na) %>% unique()
           } else {
             character(0)
           }
@@ -2652,7 +2821,7 @@ has_repeated_labels <- function(spec) {
 # 参照先のprefixを先に生成してから参照元を生成するよう順序を並べ替え、既に生成済みのドメイン(built_domains、
 # 引数built_domainsでDM/AE/DSなどを追加で渡せる)の値を結合してから条件判定する
 build_other_domains <- function(dm, cdisc_variable_values, registration_start_date, meddra, presence_conditions, required_var_instances = NULL, numeric_bounds = NULL, field_ref_bounds = NULL,
-                                 exclude_prefixes = c("DM", "AE", "DS"), coding_block_prefixes = c("MH"), repeated_prefixes = character(0), exclusive_prefixes = c("DD"), built_domains = list(), age_bounds = NULL, multi_record_alias_names = character(0), who_drug_idf = NULL, active_sheet_table = NULL, visit_lookup = NULL, discontinuation_date = NULL, date_ref_bounds = NULL, pre_built_domains = list(), pre_built_alias_names = list()) {
+                                 exclude_prefixes = c("DM", "AE", "DS"), coding_block_prefixes = c("MH"), repeated_prefixes = character(0), exclusive_prefixes = c("DD"), built_domains = list(), age_bounds = NULL, multi_record_alias_names = character(0), who_drug_idf = NULL, active_sheet_table = NULL, visit_lookup = NULL, discontinuation_date = NULL, date_ref_bounds = NULL, pre_built_domains = list(), pre_built_alias_names = list(), field_numeric_bounds = NULL) {
   prefixes <- setdiff(unique(cdisc_variable_values[["prefix"]]), exclude_prefixes)
 
   cdisc_variable_to_prefix <- build_cdisc_variable_to_prefix(cdisc_variable_values)
@@ -2669,7 +2838,7 @@ build_other_domains <- function(dm, cdisc_variable_values, registration_start_da
         built_domains = built_domains, cdisc_variable_to_prefix = cdisc_variable_to_prefix, age_bounds = age_bounds,
         multi_record_alias_names = multi_record_alias_names, who_drug_idf = who_drug_idf, active_sheet_table = active_sheet_table,
         visit_lookup = visit_lookup, discontinuation_date = discontinuation_date, date_ref_bounds = date_ref_bounds,
-        existing_data = existing_data, finalize = finalize
+        existing_data = existing_data, finalize = finalize, field_numeric_bounds = field_numeric_bounds
       )
     } else {
       build_generic_domain(
@@ -2678,7 +2847,7 @@ build_other_domains <- function(dm, cdisc_variable_values, registration_start_da
         built_domains = built_domains, cdisc_variable_to_prefix = cdisc_variable_to_prefix, age_bounds = age_bounds,
         multi_record_alias_names = multi_record_alias_names, who_drug_idf = who_drug_idf, active_sheet_table = active_sheet_table,
         visit_lookup = visit_lookup, discontinuation_date = discontinuation_date, date_ref_bounds = date_ref_bounds,
-        is_exclusive = px %in% exclusive_prefixes, existing_data = existing_data, finalize = finalize
+        is_exclusive = px %in% exclusive_prefixes, existing_data = existing_data, finalize = finalize, field_numeric_bounds = field_numeric_bounds
       )
     }
   }

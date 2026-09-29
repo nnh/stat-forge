@@ -634,7 +634,7 @@ function injectDmRfstdtc(data, builtDomains) {
   return { data, injected: true };
 }
 
-function populateGenericDateFields(data, spec, registrationStartDate, dateRefBounds, existingData) {
+function populateGenericDateFields(data, spec, registrationStartDate, dateRefBounds, existingData, lowerBoundByUsubjid) {
   const existingColumns = new Set(Object.keys(data[0] || {}));
   let dateVars = [...new Set(spec.filter((r) => r.field_type === "date").map((r) => r.cdisc_variable))].filter(
     (v) => !existingColumns.has(v)
@@ -652,6 +652,10 @@ function populateGenericDateFields(data, spec, registrationStartDate, dateRefBou
         return;
       }
       let lower = registrationStartDate;
+      // lowerBoundByUsubjid(RFICDTC・BRTHDTC由来の被験者ごとの下限)が渡された場合は、明示的な参照の
+      // 有無によらず常に守るべき下限として適用する
+      const subjectLower = lowerBoundByUsubjid ? lowerBoundByUsubjid[row.USUBJID] : null;
+      if (subjectLower != null && subjectLower > lower) lower = subjectLower;
       // RFSTDTC(症例登録日)は、この変数に明示的なmin_date参照(minRefVals)が無い場合の
       // デフォルト下限としてのみ使う。明示的な参照がある変数にまで一律にRFSTDTCを下限に加えると、
       // その変数本来の(RFSTDTCより前を許容する)意味を壊してしまうため
@@ -686,14 +690,43 @@ function populateDoseFields(data, spec) {
   return data;
 }
 
+// fieldNumericBounds(alias_name, label単位のcdisc_variable別min/max)を(alias_name|label|cdisc_variable)キーの
+// Mapに変換する。DUMMY値になるはずだったtext型の数値項目(例: 分割数のPRDOSFRQ)を数値にするために使う
+function buildFieldNumericLookup(fieldNumericBounds) {
+  const lookup = new Map();
+  (fieldNumericBounds || []).forEach((r) => {
+    lookup.set(`${r.alias_name}|${r.label}|${r.cdisc_variable}`, { min_value: r.min_value, max_value: r.max_value });
+  });
+  return lookup;
+}
+
+// 数値バリデーション(min/max)を持つtext型項目に入れる整数値を返す。下限が無い場合は0、上限が無い場合は
+// 下限+10とする(下限が上限を超える場合は下限を上限に合わせる)
+function generateNumericTextValue(bound) {
+  let lo = bound.min_value != null ? bound.min_value : 0;
+  const hi = bound.max_value != null ? bound.max_value : lo + 10;
+  if (lo > hi) lo = hi;
+  const loInt = Math.ceil(lo);
+  const hiInt = Math.floor(hi);
+  if (loInt > hiInt) return String(Math.round(lo));
+  return String(loInt + Math.floor(rng() * (hiInt - loInt + 1)));
+}
+
 // radio_button/check_box/date/doseのいずれでも埋まらなかった対象変数に、とりあえずDUMMY値を格納する
-// (Rのpopulate_dummy_fields()に対応)
-function populateGenericDummyFields(data, spec) {
+// (Rのpopulate_dummy_fields()に対応)。fieldNumericBoundsに数値バリデーションがあるalias_nameの項目は、
+// DUMMYではなくその範囲内の整数にする
+function populateGenericDummyFields(data, spec, fieldNumericBounds) {
   const existingColumns = new Set(Object.keys(data[0] || {}));
   const remainingVars = [...new Set(spec.map((r) => r.cdisc_variable))].filter((v) => !existingColumns.has(v));
+  const boundsByAliasVar = new Map();
+  (fieldNumericBounds || []).forEach((r) => {
+    const key = `${r.alias_name}|${r.cdisc_variable}`;
+    if (!boundsByAliasVar.has(key)) boundsByAliasVar.set(key, { min_value: r.min_value, max_value: r.max_value });
+  });
   remainingVars.forEach((varName) => {
     data.forEach((row) => {
-      row[varName] = "DUMMY";
+      const bound = boundsByAliasVar.get(`${row.alias_name}|${varName}`);
+      row[varName] = bound ? generateNumericTextValue(bound) : "DUMMY";
     });
   });
   return data;
@@ -762,7 +795,12 @@ function populateDrugFields(data, spec, drugVars, whoDrugIdf) {
       let fixedName = null;
       if (defaultValues.length === 1 && /^[0-9]+$/.test(defaultValues[0])) {
         const hit = whoDrugIdf.find((r) => r.drug_code === defaultValues[0] && r.full_name_en != null);
-        if (hit) fixedName = hit.full_name_en;
+        if (hit) {
+          fixedName = hit.full_name_en;
+        } else {
+          const genericHit = whoDrugIdf.find((r) => r.drug_code === defaultValues[0] && r.generic_name_en != null);
+          if (genericHit) fixedName = genericHit.generic_name_en;
+        }
       }
       targetRows.forEach((row) => {
         row[varName] = fixedName != null ? fixedName : sampleOne(drugNames);
@@ -877,6 +915,20 @@ function clampDatesToDiscontinuation(data, dateVars, registrationStartDate, disc
         // しているだけ)。真に有効な範囲が無いかどうかはhardUpperとlowerで判定する
         let hardUpper = discon != null ? (discon > registrationStartDate ? discon : registrationStartDate) : today;
         if (maxVal != null && maxVal < hardUpper) hardUpper = maxVal;
+        // 中止日が理由で有効範囲が消えている場合(後療法等、参照先の日付(lowerの根拠)自体が既に
+        // 被験者の中止日より後になっているケース)は、その項目が中止後に妥当に発生しうることを意味する
+        // だけで、本当に無効な範囲というわけではない。中止日による上限を外し、代わりに「今日」
+        // (maxValがあればそちらも考慮)を上限として救済を試みる。中止日を外しても尚範囲が無い場合のみ、
+        // 下のif節で従来通り未入力(null)にする
+        let rescued = false;
+        if (hardUpper < lower && minVal != null && discon != null) {
+          let hardUpperNoDiscon = today;
+          if (maxVal != null && maxVal < hardUpperNoDiscon) hardUpperNoDiscon = maxVal;
+          if (hardUpperNoDiscon >= lower) {
+            hardUpper = hardUpperNoDiscon;
+            rescued = true;
+          }
+        }
         // minVal(date_ref_boundsの明示的なmin_date参照)が実際に効いてlowerを押し上げているときだけ
         // 「有効な範囲が無い」と判定する。RFSTDTC/BRTHDTCのデフォルト下限だけでhardUpperを超える場合
         // (例: 登録日が中止日より後という別の既存の実データ上の事情)は、この日付項目固有の問題では
@@ -897,8 +949,9 @@ function clampDatesToDiscontinuation(data, dateVars, registrationStartDate, disc
           return;
         }
         // 通常のケース(有効な範囲は存在する): 上限はhardUpperを超えない範囲で、可能な限り既存値
-        // (current)を尊重する(discon超過のみが理由の場合、既存値に近い日付に再サンプルするため)
-        let upper = discon != null ? hardUpper : current;
+        // (current)を尊重する(discon超過のみが理由の場合、既存値に近い日付に再サンプルするため)。
+        // ただしrescuedな行は中止日制約そのものを外して救済しているため、既存値には寄せない
+        let upper = discon != null && !rescued ? hardUpper : current;
         if (upper > hardUpper) upper = hardUpper;
         if (upper < lower) upper = lower;
         row[varName] = randomDateBetween(lower, upper);
@@ -1144,11 +1197,15 @@ function buildGenericDomain(dm, spec, prefix, registrationStartDate, meddraData,
     alias_name: row.alias_name,
   }));
 
+  // SUPPQUALはCDISC SDTM標準上SEQ/SPID変数を持たないため、他ドメインと違い付与しない
+  const isSuppqual = prefix === "SUPPQUAL";
   const spidVar = `${prefix}SPID`;
-  data.forEach((row) => {
-    row[spidVar] = row.alias_name;
-  });
-  data = applyMultiRecordSpid(data, spidVar, multiRecordAliasNames);
+  if (!isSuppqual) {
+    data.forEach((row) => {
+      row[spidVar] = row.alias_name;
+    });
+    data = applyMultiRecordSpid(data, spidVar, multiRecordAliasNames);
+  }
 
   // dateRefBoundsが他ドメインの日付列を参照する場合、populateGenericDateFields()より前にbuiltDomains
   // から該当列を結合しておく(そうしないと生成時点でref_cdisc_variableがdataの列に無く、下限/上限制約が
@@ -1177,12 +1234,12 @@ function buildGenericDomain(dm, spec, prefix, registrationStartDate, meddraData,
   // (discon超過判定は既に満たされているはずなので実質ref違反判定のみ効く)
   data = clampDatesToDiscontinuation(data, dateVars, registrationStartDate, discontinuationDate, scopedDateRefBounds, existingData, presenceConditions);
   data = populateDoseFields(data, spec);
-  data = populateGenericDummyFields(data, spec);
+  data = populateGenericDummyFields(data, spec, opts.fieldNumericBounds);
   const seqVar = `${prefix}SEQ`;
   // wave分割していない(existingData無し)通常時は、従来通りここでSEQ相当の連番を振る。
   // wave分割時は、後段でexistingData(前wave分)と結合してから、finalize=trueのタイミングで
-  // まとめて振る(通しの連番にするため)
-  if (!existingData) {
+  // まとめて振る(通しの連番にするため)。SUPPQUALはSEQを持たないため対象外
+  if (!existingData && !isSuppqual) {
     addSeq(data, seqVar);
   }
 
@@ -1232,7 +1289,7 @@ function buildGenericDomain(dm, spec, prefix, registrationStartDate, meddraData,
   if (existingData) {
     data = [...existingData, ...data];
   }
-  if (existingData && finalize) {
+  if (existingData && finalize && !isSuppqual) {
     addSeq(data, seqVar);
   }
   if (!finalize) {
@@ -1297,6 +1354,7 @@ function buildRepeatedDomain(dm, spec, prefix, registrationStartDate, meddraData
   const existingData = opts.existingData || null;
   const finalize = opts.finalize !== false;
   const drugNames = whoDrugIdf ? [...new Set(whoDrugIdf.map((r) => r.full_name_en).filter((v) => v != null))] : [];
+  const fieldNumericLookup = buildFieldNumericLookup(opts.fieldNumericBounds);
 
   const ownVars = new Set(spec.map((r) => r.cdisc_variable));
   const scopedPresenceConditions = (presenceConditions || []).filter((pc) => ownVars.has(pc.cdisc_variable));
@@ -1529,7 +1587,12 @@ function buildRepeatedDomain(dm, spec, prefix, registrationStartDate, meddraData
         let fixedName = null;
         if (dv != null && /^[0-9]+$/.test(dv) && whoDrugIdf) {
           const hit = whoDrugIdf.find((r) => r.drug_code === dv && r.full_name_en != null);
-          if (hit) fixedName = hit.full_name_en;
+          if (hit) {
+            fixedName = hit.full_name_en;
+          } else {
+            const genericHit = whoDrugIdf.find((r) => r.drug_code === dv && r.generic_name_en != null);
+            if (genericHit) fixedName = genericHit.generic_name_en;
+          }
         }
         if (fixedName != null) {
           rows.forEach((row) => {
@@ -1549,8 +1612,10 @@ function buildRepeatedDomain(dm, spec, prefix, registrationStartDate, meddraData
           row[varName] = sampleOne(doseChoices);
         });
       } else {
+        // 数値バリデーション(min/max)を持つtext型項目(例: 分割数)は、DUMMYではなくその範囲内の整数にする
+        const numericBound = fieldNumericLookup.get(`${key}|${varName}`);
         rows.forEach((row) => {
-          row[varName] = "DUMMY";
+          row[varName] = numericBound ? generateNumericTextValue(numericBound) : "DUMMY";
         });
       }
     });
@@ -1739,6 +1804,7 @@ function buildOtherDomains(dm, cdiscVariableValues, registrationStartDate, meddr
       visitLookup,
       discontinuationDate,
       dateRefBounds,
+      fieldNumericBounds: opts.fieldNumericBounds || [],
       isExclusive: exclusivePrefixes.has(prefix),
       existingData: existingData || null,
       finalize: finalize !== false,

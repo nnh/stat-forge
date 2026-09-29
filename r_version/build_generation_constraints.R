@@ -158,7 +158,10 @@ build_generation_constraints <- function(validator_table, df_cdisc, field_refere
             )
           } else if (clause[["kind"]] == "field_ref") {
             ref_var <- resolve_ref_cdisc_variable(alias_name, clause[["ref_field"]])
-            if (length(ref_var) == 0 || ref_var[1] == cdisc_variable) return(tibble())
+            # LB/VS/QS等、同一シート内の複数インスタンスが同じcdisc_variable名(例: LBORRES)を
+            # 共有するドメインでは、cdisc_variable名だけの比較では別インスタンスへの正当な参照まで
+            # 自己参照と誤判定してしまうため、実際のフィールド名同士で比較する
+            if (length(ref_var) == 0 || clause[["ref_field"]] == field_name) return(tibble())
             ref_lbl <- field_to_label %>% filter(alias_name == .env$alias_name, field == clause[["ref_field"]]) %>% pull(label) %>% unname()
             tibble(
               cdisc_variable = cdisc_variable,
@@ -175,7 +178,7 @@ build_generation_constraints <- function(validator_table, df_cdisc, field_refere
             # 複数のexpected_value行を作る(apply_presence_conditions側でref_cdisc_variableごとに
             # グルーピングされ、値の集合に対するOR判定になる。異なるref_cdisc_variable同士はAND)
             ref_var <- resolve_ref_cdisc_variable(alias_name, clause[["ref_field"]])
-            if (length(ref_var) == 0 || ref_var[1] == cdisc_variable) return(tibble())
+            if (length(ref_var) == 0 || clause[["ref_field"]] == field_name) return(tibble())
             ref_lbl <- field_to_label %>% filter(alias_name == .env$alias_name, field == clause[["ref_field"]]) %>% pull(label) %>% unname()
             tibble(
               cdisc_variable = cdisc_variable,
@@ -187,12 +190,27 @@ build_generation_constraints <- function(validator_table, df_cdisc, field_refere
               expected_value = clause[["values"]],
               condition_type = "equals"
             )
+          } else if (clause[["kind"]] == "field_name_ref") {
+            # "STAT=='NOT DONE'"のような接尾辞名参照。predicate(STAT.blank?)と同じく
+            # own_prefix+接尾辞で同一ブロック内のcdisc_variableを直接組み立てる
+            own_prefix <- field_to_prefix %>% filter(alias_name == .env$alias_name, field == .env$field_name) %>% pull(prefix) %>% unname()
+            if (length(own_prefix) == 0) return(tibble())
+            tibble(
+              cdisc_variable = cdisc_variable,
+              label = label,
+              alias_name = alias_name,
+              ref_cdisc_variable = str_c(own_prefix[1], clause[["suffix"]]),
+              ref_alias_name = alias_name,
+              ref_label = NA_character_,
+              expected_value = clause[["value"]],
+              condition_type = "equals"
+            )
           } else if (clause[["kind"]] == "field_numeric_cmp") {
             # fieldN>=数値のような、同一シート内の別フィールドの値との数値不等号比較(例:
             # "f16>=2"(骨壊死のGradeが2以上))。equals/not_blankと異なりref側の値を数値として
             # 閾値と比較する必要があるため、専用のcondition_type(numeric_ge/le/gt/lt)にする
             ref_var <- resolve_ref_cdisc_variable(alias_name, clause[["ref_field"]])
-            if (length(ref_var) == 0 || ref_var[1] == cdisc_variable) return(tibble())
+            if (length(ref_var) == 0 || clause[["ref_field"]] == field_name) return(tibble())
             ref_lbl <- field_to_label %>% filter(alias_name == .env$alias_name, field == clause[["ref_field"]]) %>% pull(label) %>% unname()
             numeric_condition_type <- case_when(
               clause[["operator"]] == ">=" ~ "numeric_ge",
@@ -235,22 +253,30 @@ build_generation_constraints <- function(validator_table, df_cdisc, field_refere
   age_ref_presence_conditions <- age_ref_condition_rows %>%
     pmap_dfr(function(alias_name, field_name, value, cdisc_variable, label) {
       parsed <- parse_age_ref_condition(value)
-      if (is.null(parsed)) {
-        return(tibble())
+      if (!is.null(parsed)) {
+        condition_type <- case_when(
+          parsed[["operator"]] == ">" ~ "age_gt",
+          parsed[["operator"]] == ">=" ~ "age_ge",
+          parsed[["operator"]] == "<" ~ "age_lt",
+          parsed[["operator"]] == "<=" ~ "age_le",
+          TRUE ~ NA_character_
+        )
+        expected_value <- as.character(parsed[["threshold"]])
+      } else {
+        # age(...)<X || age(...)>=Y のような、同じ2フィールドへのage()比較を"||"で組み合わせた
+        # 「範囲外のときだけ必須」パターン(例: 18歳未満または65歳以上のときだけ必須)。
+        # min_age/max_ageを"min,max"の形でexpected_valueに詰める(age_outsideはこの1条件だけで
+        # 完結させたいため、通常のage_gt/age_ge/age_lt/age_leのように複数行のAND蓄積に頼らない)
+        parsed <- parse_age_ref_or_condition(value)
+        if (is.null(parsed)) {
+          return(tibble())
+        }
+        condition_type <- "age_outside"
+        expected_value <- str_c(parsed[["min_age"]], ",", parsed[["max_age"]])
       }
       ref1_var <- resolve_ref_cdisc_variable(parsed[["ref1_alias_name"]], parsed[["ref1_field"]])
       ref2_var <- resolve_ref_cdisc_variable(parsed[["ref2_alias_name"]], parsed[["ref2_field"]])
-      if (length(ref1_var) == 0 || length(ref2_var) == 0) {
-        return(tibble())
-      }
-      condition_type <- case_when(
-        parsed[["operator"]] == ">" ~ "age_gt",
-        parsed[["operator"]] == ">=" ~ "age_ge",
-        parsed[["operator"]] == "<" ~ "age_lt",
-        parsed[["operator"]] == "<=" ~ "age_le",
-        TRUE ~ NA_character_
-      )
-      if (is.na(condition_type)) {
+      if (length(ref1_var) == 0 || length(ref2_var) == 0 || is.na(condition_type)) {
         return(tibble())
       }
       ref1_lbl <- field_to_label %>% filter(alias_name == parsed[["ref1_alias_name"]], field == parsed[["ref1_field"]]) %>% pull(label) %>% unname()
@@ -265,7 +291,7 @@ build_generation_constraints <- function(validator_table, df_cdisc, field_refere
         ref2_cdisc_variable = ref2_var[1],
         ref2_alias_name = parsed[["ref2_alias_name"]],
         ref2_label = if (length(ref2_lbl) > 0) ref2_lbl[1] else NA_character_,
-        expected_value = as.character(parsed[["threshold"]]),
+        expected_value = expected_value,
         condition_type = condition_type
       )
     })

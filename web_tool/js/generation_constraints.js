@@ -96,6 +96,12 @@ function extractDateCrossRefOffsetDays(validatorType, value) {
 // 異なるフィールドが混ざる、またはパースできない断片があればnull(Rのparse_presence_or_conditions()に対応)
 const PRESENCE_OR_FRAGMENT_RE = /^(?:field|f)([0-9]+)\s*==\s*(?:'([^']*)'|"([^"]*)"|(\S+))$/;
 function parsePresenceOrConditions(value) {
+  // "&&"を含む値(例: "field104=='POSITIVE'&&STAT.blank?")は"&&"で組み合わさった条件
+  // (buildAndPresenceConditions()側で処理する)であり、ここでの単純な"||"分割の対象ではない。
+  // ガードが無いと、"||"が無いために値全体が1個の断片として扱われ、最後の代替パターン(\S+)が
+  // 空白を含まない文字列全体に貪欲マッチしてしまい、クォートや"&&"以降を含む壊れた値
+  // (例: "'POSITIVE'&&STAT.blank?")がそのままexpected_valueとして登録されるバグになる
+  if (value.includes("&&")) return null;
   const fragments = value.split("||").map((s) => s.trim());
   const matches = fragments.map((f) => f.match(PRESENCE_OR_FRAGMENT_RE));
   if (matches.some((m) => m === null)) return null;
@@ -204,6 +210,34 @@ function parseAgeRefCondition(value) {
   };
 }
 
+// age(ref('sheet1', N1), ref('sheet2', N2)) OP1 X || age(ref('sheet1', N1), ref('sheet2', N2)) OP2 Y
+// のような、同じ2フィールドに対するage()比較を"||"で2つ組み合わせた条件(validate_presence_if。
+// 「範囲外のときだけ必須」パターン、例: age(...)<18 || age(...)>=65 = 18歳未満または65歳以上のときだけ必須)を
+// 解釈する。2つの断片が同じref1/ref2(alias_name+field番号)を参照しており、演算子が下限側(</<=)と
+// 上限側(>/>=)の組み合わせ(順不同)である場合だけ対応する(Rのparse_age_ref_or_condition()に対応)
+function parseAgeRefOrCondition(value) {
+  const clauses = value.split("||").map((c) => c.trim());
+  if (clauses.length !== 2) return null;
+  const parsed = clauses.map((c) => c.match(AGE_REF_CONDITION_RE));
+  if (parsed.some((m) => !m)) return null;
+  const refPairs = parsed.map((m) => `${m[1]}-${m[2]}-${m[3]}-${m[4]}`);
+  if (refPairs[0] !== refPairs[1]) return null;
+  const operators = parsed.map((m) => m[5]);
+  const thresholds = parsed.map((m) => Number(m[6]));
+  const lowerIdx = operators.findIndex((op) => op === "<" || op === "<=");
+  const upperIdx = operators.findIndex((op) => op === ">" || op === ">=");
+  if (lowerIdx === -1 || upperIdx === -1 || lowerIdx === upperIdx) return null;
+  const m0 = parsed[0];
+  return {
+    ref1AliasName: m0[1],
+    ref1Field: `field${m0[2]}`,
+    ref2AliasName: m0[3],
+    ref2Field: `field${m0[4]}`,
+    minAge: thresholds[lowerIdx],
+    maxAge: thresholds[upperIdx],
+  };
+}
+
 // value(例: (STAT.blank?) && (ref('registration', 4)=='F'))を"&&"で分割し、各断片の括弧を除いた文字列にする
 function parseAndClauses(value) {
   if (!value.includes("&&")) return null;
@@ -220,12 +254,19 @@ const AND_FIELD_EQUALITY_RE = /^(?:field|f)([0-9]+)\s*==\s*(?:field|f)([0-9]+)$/
 // fieldN>=数値(または fN>=数値)のように、同一シート内の別フィールドの値を数値として不等号比較する形。
 // 例: "f16>=2&&STAT.blank?"(骨壊死のGrade(field16)が2以上のときだけ、かつSTATが空欄のときだけ提示)
 const AND_FIELD_NUMERIC_CMP_RE = /^(?:field|f)([0-9]+)\s*(>=|<=|>|<)\s*(-?[0-9]+(?:\.[0-9]+)?)$/;
+// "STAT == 'NOT DONE'"のように、フィールド番号ではなく接尾辞名(cdisc_variableからprefixを除いた部分。
+// PRESENCE_PREDICATE_REの".blank?/.present?"と同じ命名規則)で同じブロック内の別フィールドを参照し、
+// 特定の値と等しいことを条件にする形。"field"/"f"+数字で始まる場合はAND_FIELD_REF_RE等の
+// フィールド番号参照として先に判定されるため、ここに来るのは数字以外の識別子のみ
+const AND_FIELD_NAME_REF_RE = /^([A-Za-z_][A-Za-z0-9_]*)\s*==\s*(?:'([^']*)'|"([^"]*)"|([^\s|&()]+))$/;
 
 // parseAndClauses()で分割した1断片を種類ごとに分類する(Rのclassify_and_clause()に対応)
 //   - "fieldN==fieldM"のような、値側もフィールド参照のコピー条件
 //     -> kind="field_equality_skip"(別のcopy機構(extractFieldEqualityRef)で扱われるため、
 //        ここではpresenceConditions行を作らない)
 //   - "fieldN>=数値"のような、同一シート内の別フィールドの値との数値不等号比較 -> kind="field_numeric_cmp"
+//   - "STAT=='値'"のような、フィールド番号ではなく接尾辞名での同一ブロック内別フィールド参照
+//     -> kind="field_name_ref"
 //   - "fieldN==2 || fieldN==3 || ..."のような、断片自体が同一フィールドに対するOR条件
 //     (例: (field22==2||field22==3||...) && (field348=='CR'||field348=='PR'))
 //     -> kind="field_ref_or"(parsePresenceOrConditions()を再利用し、複数のexpected_valueを持つ)
@@ -240,6 +281,8 @@ function classifyAndClause(clause) {
   if (mField) return { kind: "field_ref", refField: `field${mField[1]}`, value: mField[2] ?? mField[3] ?? mField[4] };
   const mNum = clause.match(AND_FIELD_NUMERIC_CMP_RE);
   if (mNum) return { kind: "field_numeric_cmp", refField: `field${mNum[1]}`, operator: mNum[2], threshold: Number(mNum[3]) };
+  const mName = clause.match(AND_FIELD_NAME_REF_RE);
+  if (mName) return { kind: "field_name_ref", suffix: mName[1], value: mName[2] ?? mName[3] ?? mName[4] };
   const orParsed = parsePresenceOrConditions(clause);
   if (orParsed) return { kind: "field_ref_or", refField: orParsed.field, values: orParsed.values };
   return null;
@@ -449,9 +492,20 @@ function buildAgeRefPresenceConditions(validatorTable, fieldLookup) {
     const key = `${vr.alias_name}|${vr.field_name}|${vr.value}`;
     if (seen.has(key)) return;
     seen.add(key);
-    const parsed = parseAgeRefCondition(vr.value);
-    if (!parsed) return;
-    const conditionType = AGE_OPERATOR_TO_CONDITION_TYPE[parsed.operator];
+    let parsed = parseAgeRefCondition(vr.value);
+    let conditionType = null;
+    let expectedValue = null;
+    if (parsed) {
+      conditionType = AGE_OPERATOR_TO_CONDITION_TYPE[parsed.operator];
+      expectedValue = String(parsed.threshold);
+    } else {
+      // age(...)<X || age(...)>=Y のような「範囲外のときだけ必須」パターン。
+      // minAge/maxAgeを"min,max"の形でexpected_valueに詰める(Rのage_outsideに対応)
+      parsed = parseAgeRefOrCondition(vr.value);
+      if (!parsed) return;
+      conditionType = "age_outside";
+      expectedValue = `${parsed.minAge},${parsed.maxAge}`;
+    }
     if (!conditionType) return;
     const ownMatches = lookupField(fieldLookup, vr.alias_name, vr.field_name);
     const ref1Matches = lookupField(fieldLookup, parsed.ref1AliasName, parsed.ref1Field);
@@ -472,7 +526,7 @@ function buildAgeRefPresenceConditions(validatorTable, fieldLookup) {
         ref2_cdisc_variable: ref2.cdisc_variable,
         ref2_alias_name: parsed.ref2AliasName,
         ref2_label: ref2.label != null ? ref2.label : null,
-        expected_value: String(parsed.threshold),
+        expected_value: expectedValue,
         condition_type: conditionType,
       });
     });
@@ -544,7 +598,12 @@ function buildAndPresenceConditions(validatorTable, fieldLookup) {
           const refMatches = lookupField(fieldLookup, vr.alias_name, clause.refField);
           refMatches.forEach((ref) => {
             const refCdiscVariable = ref.field_type === "meddra" ? `${ref.prefix}LLTCD` : ref.cdisc_variable;
-            if (refCdiscVariable == null || refCdiscVariable === own.cdisc_variable) return;
+            // LB/VS/QS等、同一シート内の複数インスタンスが同じcdisc_variable名(例: LBORRES)を
+            // 共有するドメインでは、cdisc_variable名だけの比較では別インスタンスへの正当な参照まで
+            // 自己参照と誤判定してしまう。lookupField()が返すオブジェクトは元のフィールド名(field)を
+            // 保持しないため、呼び出し元がすでに持っているフィールド名(vr.field_name/clause.refField)
+            // 同士で比較する
+            if (refCdiscVariable == null || clause.refField === vr.field_name) return;
             rows.push({
               cdisc_variable: own.cdisc_variable,
               label: own.label,
@@ -556,6 +615,20 @@ function buildAndPresenceConditions(validatorTable, fieldLookup) {
               condition_type: "equals",
             });
           });
+        } else if (clause.kind === "field_name_ref") {
+          // "STAT=='NOT DONE'"のような接尾辞名参照。predicate(STAT.blank?)と同じく
+          // own.prefix+接尾辞で同一ブロック内のcdisc_variableを直接組み立てる
+          if (own.prefix == null) return;
+          rows.push({
+            cdisc_variable: own.cdisc_variable,
+            label: own.label,
+            alias_name: vr.alias_name,
+            ref_cdisc_variable: `${own.prefix}${clause.suffix}`,
+            ref_alias_name: vr.alias_name,
+            ref_label: null,
+            expected_value: clause.value,
+            condition_type: "equals",
+          });
         } else if (clause.kind === "field_ref_or") {
           // 断片自体がOR条件(例: field22==2||field22==3||...)の場合、同じref_cdisc_variableに対する
           // 複数のexpected_value行を作る(applyPresenceConditions側でref_cdisc_variableごとに
@@ -563,7 +636,7 @@ function buildAndPresenceConditions(validatorTable, fieldLookup) {
           const refMatches = lookupField(fieldLookup, vr.alias_name, clause.refField);
           refMatches.forEach((ref) => {
             const refCdiscVariable = ref.field_type === "meddra" ? `${ref.prefix}LLTCD` : ref.cdisc_variable;
-            if (refCdiscVariable == null || refCdiscVariable === own.cdisc_variable) return;
+            if (refCdiscVariable == null || clause.refField === vr.field_name) return;
             clause.values.forEach((expectedValue) => {
               rows.push({
                 cdisc_variable: own.cdisc_variable,
@@ -587,7 +660,7 @@ function buildAndPresenceConditions(validatorTable, fieldLookup) {
           if (!numericConditionType) return;
           refMatches.forEach((ref) => {
             const refCdiscVariable = ref.field_type === "meddra" ? `${ref.prefix}LLTCD` : ref.cdisc_variable;
-            if (refCdiscVariable == null || refCdiscVariable === own.cdisc_variable) return;
+            if (refCdiscVariable == null || clause.refField === vr.field_name) return;
             rows.push({
               cdisc_variable: own.cdisc_variable,
               label: own.label,
@@ -1025,12 +1098,16 @@ function applyPresenceConditions(data, presenceConditions, cdiscVariableToPrefix
   // equals/not_blankより先に適用する。ref_cdisc_variable/ref2_cdisc_variableという2つの参照先を持つ点が
   // 通常のequals/not_blankと異なるため、専用の処理にする
   applicable
-    .filter((pc) => ["age_gt", "age_ge", "age_lt", "age_le"].includes(pc.condition_type) && columns.has(pc.ref2_cdisc_variable))
+    .filter((pc) => ["age_gt", "age_ge", "age_lt", "age_le", "age_outside"].includes(pc.condition_type) && columns.has(pc.ref2_cdisc_variable))
     .forEach((pc) => {
       const targetRows = ownTargetRows(pc.alias_name, pc.label);
       const date1Vals = resolveRefVals(pc.ref_cdisc_variable, pc.ref_alias_name, pc.ref_label, pc.alias_name, pc.label);
       const date2Vals = resolveRefVals(pc.ref2_cdisc_variable, pc.ref2_alias_name, pc.ref2_label, pc.alias_name, pc.label);
-      const threshold = Number(pc.expected_value);
+      // age_outside(age(...)<minAge || age(...)>=maxAge、範囲外のときだけ必須)は
+      // expected_valueに"minAge,maxAge"の形で詰めてある(Rのage_outsideに対応)
+      const isOutside = pc.condition_type === "age_outside";
+      const threshold = isOutside ? null : Number(pc.expected_value);
+      const outsideBounds = isOutside ? pc.expected_value.split(",").map(Number) : null;
       data.forEach((row, i) => {
         if (!targetRows[i]) return;
         const d1 = date1Vals[i] != null ? new Date(date1Vals[i]) : null;
@@ -1042,6 +1119,7 @@ function applyPresenceConditions(data, presenceConditions, cdiscVariableToPrefix
           else if (pc.condition_type === "age_ge") satisfied = ageYears >= threshold;
           else if (pc.condition_type === "age_lt") satisfied = ageYears < threshold;
           else if (pc.condition_type === "age_le") satisfied = ageYears <= threshold;
+          else if (isOutside) satisfied = ageYears < outsideBounds[0] || ageYears >= outsideBounds[1];
         }
         if (!satisfied) {
           row[pc.cdisc_variable] = null;

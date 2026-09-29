@@ -311,10 +311,27 @@ function reorderDatesBySheetSeq(data, dateVars, cdiscVariableValues, registratio
         if (t < rfstdtcTime) t = rfstdtcTime;
       }
       if (t > upperTime) t = upperTime;
+      // 中止日(upperTime)がBRTHDTCより前という矛盾したデータでも、生物学的な下限であるBRTHDTCを優先する
+      if (row.BRTHDTC != null) {
+        const brthTime = new Date(row.BRTHDTC).getTime();
+        if (t < brthTime) t = brthTime;
+      }
       row[v] = new Date(t).toISOString().slice(0, 10);
     });
   });
   return data;
+}
+
+// dm(RFICDTC/BRTHDTC)から、被験者ごとの日付生成の下限(RFICDTC(同意取得日)とBRTHDTC(生年月日)の遅い方)の
+// マップ(USUBJID -> YYYY-MM-DD)を作る。DS/AE等、同意取得前・出生前の日付になってはならないドメインの
+// 日付生成で使う
+function buildSubjectLowerBounds(dm) {
+  const lowerBoundByUsubjid = {};
+  (dm || []).forEach((dmRow) => {
+    const candidates = [dmRow.RFICDTC, dmRow.BRTHDTC].filter((v) => v != null && v !== "");
+    if (candidates.length > 0) lowerBoundByUsubjid[dmRow.USUBJID] = candidates.reduce((a, b) => (a > b ? a : b));
+  });
+  return lowerBoundByUsubjid;
 }
 
 // startDateStr〜endDateStr(YYYY-MM-DD)の間のランダムな日付文字列(YYYY-MM-DD)を返す

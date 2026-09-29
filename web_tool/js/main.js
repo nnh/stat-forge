@@ -1,7 +1,7 @@
 // 画面操作の配線: JSONアップロード -> 設定入力 -> 生成 -> プレビュー/ダウンロード
 
-const APP_VERSION = "1.0";
-const APP_BUILD_DATE = "2026-09-16";
+const APP_VERSION = "1.1";
+const APP_BUILD_DATE = "2026-09-29";
 document.getElementById("app-version").textContent = `v${APP_VERSION} (${APP_BUILD_DATE})`;
 
 let edcSpec = null;
@@ -174,6 +174,15 @@ function handleFile(file) {
     return;
   }
   const reader = new FileReader();
+  // readAsText自体が失敗した場合(Box等のクラウドストレージ上でファイルが未同期のプレースホルダー
+  // 状態になっている等)、onloadが呼ばれずonerror/onabortも未設定だとエラーも表示されず
+  // 「反応しない」ように見えてしまうため、原因を画面に出す
+  reader.onerror = () => {
+    alert("JSONファイルの読み込みに失敗しました: " + (reader.error ? reader.error.message : "不明なエラー"));
+  };
+  reader.onabort = () => {
+    alert("JSONファイルの読み込みが中断されました。");
+  };
   reader.onload = (event) => {
     try {
       edcSpec = JSON.parse(event.target.result);
@@ -213,6 +222,10 @@ dropZone.addEventListener("drop", (e) => {
 dropZone.addEventListener("click", () => fileInput.click());
 fileInput.addEventListener("change", (e) => {
   if (e.target.files.length) handleFile(e.target.files[0]);
+  // 選択後にvalueをリセットしておく。リセットしないと、同じファイルを連続して選び直した場合に
+  // input要素の値(選択ファイル一覧)が変化しないため、ブラウザがchangeイベントを発火せず、
+  // 見た目上「反応しない」状態になる
+  e.target.value = "";
 });
 
 // 生成開始時に前回の結果を画面から消す。辞書読み込み等に時間がかかり、クリックが反応しているのか
@@ -409,6 +422,7 @@ document.getElementById("generate-btn").addEventListener("click", async () => {
   const cdiscVariableValuesForOthers = excludeAeLinkedPrefixes(cdiscVariableValues, aeLinkedDomains);
   const otherDomains = buildOtherDomains(dm, cdiscVariableValuesForOthers, registrationStartDate, meddraData, presenceConditions, requiredVarInstances, numericBounds, fieldRefBounds, {
     builtDomains: { DM: dm, AE: ae, DS: ds },
+    fieldNumericBounds,
     ageBounds,
     multiRecordAliasNames,
     activeSheetTable,
@@ -433,6 +447,11 @@ document.getElementById("generate-btn").addEventListener("click", async () => {
     TR: (d) => populateTrOrres(d, cdiscVariableValues, fieldNumericBounds),
     VS: (d) => populateVsOrres(d, cdiscVariableValues, fieldNumericBounds),
     FA: (d) => populateFaOrres(d, cdiscVariableValues, fieldNumericBounds),
+  });
+  // *DOSE項目を、TRT(例: CMTRT/PRTRT)ごとの数値バリデーション(min/max)に基づいたそれらしい
+  // 数値に置き換える(ORRESと同じ理由。*TRT列を持たないドメインやTRTごとの範囲が未定義の場合は無処理)
+  Object.keys(otherDomains).forEach((prefix) => {
+    otherDomains[prefix] = populateDoseRealism(otherDomains[prefix], cdiscVariableValues, fieldNumericBounds, whoDrugIdf);
   });
   // prefixSEQ列を持つドメインは、その列で行を並べ替えておく(mergeやfilter等で崩れた行順を
   // 最終出力前に揃えるため)

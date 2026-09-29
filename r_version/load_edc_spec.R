@@ -173,7 +173,8 @@ load_edc_spec <- function(json_path) {
     dm, cdisc_variable_values_for_others, registration_start_date, meddra, presence_conditions, required_var_instances, numeric_bounds, field_ref_bounds,
     built_domains = list(DM = dm, AE = ae, DS = ds), age_bounds = age_bounds, multi_record_alias_names = multi_record_alias_names, who_drug_idf = who_drug_idf,
     active_sheet_table = active_sheet_table, visit_lookup = visit_lookup, discontinuation_date = discontinuation_date, date_ref_bounds = date_ref_bounds,
-    pre_built_domains = list(MH = mh_registration), pre_built_alias_names = list(MH = "registration")
+    pre_built_domains = list(MH = mh_registration), pre_built_alias_names = list(MH = "registration"),
+    field_numeric_bounds = field_numeric_bounds
   )
 
   # alias_name/label/sheet_seqは他ドメイン生成時の突き合わせキーやDSSEQ並び替えに使い終わったため、
@@ -191,6 +192,11 @@ load_edc_spec <- function(json_path) {
     VS = function(d) populate_vs_orres(d, cdisc_variable_values, field_numeric_bounds),
     FA = function(d) populate_fa_orres(d, cdisc_variable_values, field_numeric_bounds)
   ))
+
+  # *DOSE項目を、TRT(例: CMTRT/PRTRT)ごとの数値バリデーション(min/max)に基づいたそれらしい
+  # 数値に置き換える(ORRESと同じ理由。*TRT列を持たないドメインやTRTごとの範囲が未定義の場合は無処理)
+  other_domains <- other_domains %>%
+    map(~ populate_dose_realism(.x, cdisc_variable_values, field_numeric_bounds, who_drug_idf))
 
   # DD(死因)は死亡した被験者のみのレコードにする(DDTEST/DDTESTCDのような固定値の列ではなく、
   # presence_conditionsで条件付けされている列(例: DDORRES)が全てNAの行を除外)
