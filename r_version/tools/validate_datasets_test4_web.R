@@ -378,9 +378,9 @@ check_ec_fixed_drug(ec, "induction3_500", "_2", fixed_value_checks_csv_path)
 check_ec_fixed_drug(ec, "maint1", "_3", fixed_value_checks_csv_path)
 check_ec_fixed_drug(ec, "quizartinib1", "_4", fixed_value_checks_csv_path)
 
-target_ec_cols <- c("ECTRT", "ECSTDTC", "ECENDTC")
 tmp_ec <- ec %>% filter(ECSPID == "induction3_500" & ECOCCUR == "")
-tmp_ec %>% check_required_vars(target_ec_cols, domain_name = "EC")
+tmp_ec %>% check_required_vars(c("ECTRT", "ECSTDTC"), domain_name = "EC")
+"ECENDTC" %>% check_required_vars(tmp_ec, ., domain_name = "EC")
 target_ec_cols <- c("ECTRT")
 suffix <- "_5"
 tmp_ec <- tmp_ec %>% rename_with(~ str_c(.x, suffix), all_of(target_ec_cols))
