@@ -174,6 +174,15 @@ function handleFile(file) {
     return;
   }
   const reader = new FileReader();
+  // readAsText自体が失敗した場合(Box等のクラウドストレージ上でファイルが未同期のプレースホルダー
+  // 状態になっている等)、onloadが呼ばれずonerror/onabortも未設定だとエラーも表示されず
+  // 「反応しない」ように見えてしまうため、原因を画面に出す
+  reader.onerror = () => {
+    alert("JSONファイルの読み込みに失敗しました: " + (reader.error ? reader.error.message : "不明なエラー"));
+  };
+  reader.onabort = () => {
+    alert("JSONファイルの読み込みが中断されました。");
+  };
   reader.onload = (event) => {
     try {
       edcSpec = JSON.parse(event.target.result);
@@ -213,6 +222,10 @@ dropZone.addEventListener("drop", (e) => {
 dropZone.addEventListener("click", () => fileInput.click());
 fileInput.addEventListener("change", (e) => {
   if (e.target.files.length) handleFile(e.target.files[0]);
+  // 選択後にvalueをリセットしておく。リセットしないと、同じファイルを連続して選び直した場合に
+  // input要素の値(選択ファイル一覧)が変化しないため、ブラウザがchangeイベントを発火せず、
+  // 見た目上「反応しない」状態になる
+  e.target.value = "";
 });
 
 // 生成開始時に前回の結果を画面から消す。辞書読み込み等に時間がかかり、クリックが反応しているのか
