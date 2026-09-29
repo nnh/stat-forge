@@ -177,9 +177,12 @@ tmp_ds <- tmp_ds %>% rename_with(~ str_c(.x, suffix), all_of(target_ds_cols))
 str_c(target_ds_cols, suffix) %>% walk(~ run_value_equals_checks_from_csv(tmp_ds, "DS", .x, fixed_value_checks_csv_path))
 tmp_ds %>% check_required_vars(c("DSDTC", "DSSTDTC"), domain_name = "DS")
 suffix <- "_3"
-tmp_ds <- ds %>% filter(EPOCH == "FOLLOW-UP" & DSSPID == "withdrawal")
-tmp_ds <- tmp_ds %>% rename_with(~ str_c(.x, suffix), all_of(target_ds_cols))
-str_c(target_ds_cols, suffix) %>% walk(~ run_value_equals_checks_from_csv(tmp_ds, "DS", .x, fixed_value_checks_csv_path))
+# withdrawalのEPOCHはTREATMENT固定のdiscon等と異なり、SCREENING/FOLLOW-UPの選択式のため、
+# EPOCH=="FOLLOW-UP"で絞り込まずDSSPIDのみで対象を取り、EPOCH自体もCSVの値域チェック対象にする
+tmp_ds <- ds %>% filter(DSSPID == "withdrawal")
+target_ds_cols_3 <- c(target_ds_cols, "EPOCH")
+tmp_ds_renamed <- tmp_ds %>% rename_with(~ str_c(.x, suffix), all_of(target_ds_cols_3))
+str_c(target_ds_cols_3, suffix) %>% walk(~ run_value_equals_checks_from_csv(tmp_ds_renamed, "DS", .x, fixed_value_checks_csv_path))
 tmp_ds %>% check_required_vars(c("DSDTC", "DSSTDTC", "EPOCH"), domain_name = "DS")
 
 # EC

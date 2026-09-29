@@ -15,13 +15,26 @@ build_ds_domain <- function(dm, cdisc_variable_values) {
   # 参照する場合、inject_cross_domain_refs()がそのインスタンスを正しく特定できるようにするため。
   # 最終的な出力からは、load_edc_spec.R側で他ドメイン生成に使い終わった後に取り除く)
   if ("DSEPOCH" %in% ds_spec[["cdisc_variable"]]) {
-    epoch_table <- ds_spec %>%
-      filter(cdisc_variable == "DSEPOCH") %>%
-      distinct(alias_name, label, default_value, sheet_seq) %>%
+    epoch_spec <- ds_spec %>% filter(cdisc_variable == "DSEPOCH")
+    epoch_table <- epoch_spec %>%
+      distinct(alias_name, label, default_value, sheet_seq, is_invisible) %>%
       arrange(sheet_seq)
+    # is_invisible==FALSE(実際にユーザーが選択する項目)かつ選択肢(code)が複数あるDSEPOCHは、
+    # 通常のradio_button項目と同様、選択肢からcoverageサンプリングして被験者ごとに割り振る
+    # (例: withdrawalシートの「中止(完了)した時期」はSCREENING/FOLLOW-UPの選択式)。
+    # それ以外(is_invisible==TRUEの隠しフィールド、または選択肢が1つ以下)は、従来通り
+    # default_valueをそのブロックの全被験者に一律適用する(シートの区分を表す固定識別子として使う)
+    epoch_codes <- epoch_spec %>% filter(!is.na(code)) %>% distinct(alias_name, label, code)
     ds <- epoch_table %>%
-      pmap_dfr(function(alias_name, label, default_value, sheet_seq) {
-        dm %>% select(USUBJID, STUDYID) %>% mutate(EPOCH = default_value, DSSPID = alias_name, alias_name = alias_name, label = label, sheet_seq = sheet_seq)
+      pmap_dfr(function(alias_name, label, default_value, sheet_seq, is_invisible) {
+        n <- nrow(dm)
+        choices <- epoch_codes %>% filter(alias_name == !!alias_name, label == !!label) %>% pull(code)
+        epoch_values <- if (!is_invisible && length(choices) > 1) {
+          sample_values_with_coverage(choices, n)
+        } else {
+          rep(default_value, n)
+        }
+        dm %>% select(USUBJID, STUDYID) %>% mutate(EPOCH = epoch_values, DSSPID = alias_name, alias_name = alias_name, label = label, sheet_seq = sheet_seq)
       })
   } else {
     ds <- dm %>% select(USUBJID, STUDYID)

@@ -25,17 +25,33 @@ function buildDsDomain(dm, cdiscVariableValues) {
       const key = `${r.alias_name}|${r.label}|${r.default_value}`;
       if (seen.has(key)) return;
       seen.add(key);
-      epochTable.push({ alias_name: r.alias_name, label: r.label, default_value: r.default_value, sheet_seq: r.sheet_seq });
+      epochTable.push({ alias_name: r.alias_name, label: r.label, default_value: r.default_value, sheet_seq: r.sheet_seq, is_invisible: r.is_invisible });
     });
     epochTable.sort((a, b) => (a.sheet_seq ?? 0) - (b.sheet_seq ?? 0));
 
+    // is_invisible===false(実際にユーザーが選択する項目)かつ選択肢(code)が複数あるDSEPOCHは、
+    // 通常のradio_button項目と同様、選択肢からcoverageサンプリングして被験者ごとに割り振る
+    // (例: withdrawalシートの「中止(完了)した時期」はSCREENING/FOLLOW-UPの選択式)。
+    // それ以外(is_invisible===trueの隠しフィールド、または選択肢が1つ以下)は、従来通り
+    // default_valueをそのブロックの全被験者に一律適用する(シートの区分を表す固定識別子として使う)
+    const codesByKey = new Map();
+    epochRows.forEach((r) => {
+      if (r.code == null) return;
+      const key = `${r.alias_name}|${r.label}`;
+      if (!codesByKey.has(key)) codesByKey.set(key, []);
+      codesByKey.get(key).push(r.code);
+    });
+
     ds = [];
     epochTable.forEach((epoch) => {
-      dm.forEach((dmRow) => {
+      const choices = codesByKey.get(`${epoch.alias_name}|${epoch.label}`) || [];
+      const isChoiceField = !epoch.is_invisible && choices.length > 1;
+      const values = isChoiceField ? sampleValuesWithCoverage(choices, dm.length) : null;
+      dm.forEach((dmRow, i) => {
         ds.push({
           USUBJID: dmRow.USUBJID,
           STUDYID: dmRow.STUDYID,
-          EPOCH: epoch.default_value,
+          EPOCH: isChoiceField ? values[i] : epoch.default_value,
           DSSPID: epoch.alias_name,
           alias_name: epoch.alias_name,
           label: epoch.label,
