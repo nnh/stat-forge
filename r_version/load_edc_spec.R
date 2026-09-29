@@ -173,7 +173,8 @@ load_edc_spec <- function(json_path) {
     dm, cdisc_variable_values_for_others, registration_start_date, meddra, presence_conditions, required_var_instances, numeric_bounds, field_ref_bounds,
     built_domains = list(DM = dm, AE = ae, DS = ds), age_bounds = age_bounds, multi_record_alias_names = multi_record_alias_names, who_drug_idf = who_drug_idf,
     active_sheet_table = active_sheet_table, visit_lookup = visit_lookup, discontinuation_date = discontinuation_date, date_ref_bounds = date_ref_bounds,
-    pre_built_domains = list(MH = mh_registration), pre_built_alias_names = list(MH = "registration")
+    pre_built_domains = list(MH = mh_registration), pre_built_alias_names = list(MH = "registration"),
+    field_numeric_bounds = field_numeric_bounds
   )
 
   # alias_name/label/sheet_seqは他ドメイン生成時の突き合わせキーやDSSEQ並び替えに使い終わったため、

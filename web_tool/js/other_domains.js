@@ -690,14 +690,43 @@ function populateDoseFields(data, spec) {
   return data;
 }
 
+// fieldNumericBounds(alias_name, label単位のcdisc_variable別min/max)を(alias_name|label|cdisc_variable)キーの
+// Mapに変換する。DUMMY値になるはずだったtext型の数値項目(例: 分割数のPRDOSFRQ)を数値にするために使う
+function buildFieldNumericLookup(fieldNumericBounds) {
+  const lookup = new Map();
+  (fieldNumericBounds || []).forEach((r) => {
+    lookup.set(`${r.alias_name}|${r.label}|${r.cdisc_variable}`, { min_value: r.min_value, max_value: r.max_value });
+  });
+  return lookup;
+}
+
+// 数値バリデーション(min/max)を持つtext型項目に入れる整数値を返す。下限が無い場合は0、上限が無い場合は
+// 下限+10とする(下限が上限を超える場合は下限を上限に合わせる)
+function generateNumericTextValue(bound) {
+  let lo = bound.min_value != null ? bound.min_value : 0;
+  const hi = bound.max_value != null ? bound.max_value : lo + 10;
+  if (lo > hi) lo = hi;
+  const loInt = Math.ceil(lo);
+  const hiInt = Math.floor(hi);
+  if (loInt > hiInt) return String(Math.round(lo));
+  return String(loInt + Math.floor(rng() * (hiInt - loInt + 1)));
+}
+
 // radio_button/check_box/date/doseのいずれでも埋まらなかった対象変数に、とりあえずDUMMY値を格納する
-// (Rのpopulate_dummy_fields()に対応)
-function populateGenericDummyFields(data, spec) {
+// (Rのpopulate_dummy_fields()に対応)。fieldNumericBoundsに数値バリデーションがあるalias_nameの項目は、
+// DUMMYではなくその範囲内の整数にする
+function populateGenericDummyFields(data, spec, fieldNumericBounds) {
   const existingColumns = new Set(Object.keys(data[0] || {}));
   const remainingVars = [...new Set(spec.map((r) => r.cdisc_variable))].filter((v) => !existingColumns.has(v));
+  const boundsByAliasVar = new Map();
+  (fieldNumericBounds || []).forEach((r) => {
+    const key = `${r.alias_name}|${r.cdisc_variable}`;
+    if (!boundsByAliasVar.has(key)) boundsByAliasVar.set(key, { min_value: r.min_value, max_value: r.max_value });
+  });
   remainingVars.forEach((varName) => {
     data.forEach((row) => {
-      row[varName] = "DUMMY";
+      const bound = boundsByAliasVar.get(`${row.alias_name}|${varName}`);
+      row[varName] = bound ? generateNumericTextValue(bound) : "DUMMY";
     });
   });
   return data;
@@ -1201,7 +1230,7 @@ function buildGenericDomain(dm, spec, prefix, registrationStartDate, meddraData,
   // (discon超過判定は既に満たされているはずなので実質ref違反判定のみ効く)
   data = clampDatesToDiscontinuation(data, dateVars, registrationStartDate, discontinuationDate, scopedDateRefBounds, existingData, presenceConditions);
   data = populateDoseFields(data, spec);
-  data = populateGenericDummyFields(data, spec);
+  data = populateGenericDummyFields(data, spec, opts.fieldNumericBounds);
   const seqVar = `${prefix}SEQ`;
   // wave分割していない(existingData無し)通常時は、従来通りここでSEQ相当の連番を振る。
   // wave分割時は、後段でexistingData(前wave分)と結合してから、finalize=trueのタイミングで
@@ -1321,6 +1350,7 @@ function buildRepeatedDomain(dm, spec, prefix, registrationStartDate, meddraData
   const existingData = opts.existingData || null;
   const finalize = opts.finalize !== false;
   const drugNames = whoDrugIdf ? [...new Set(whoDrugIdf.map((r) => r.full_name_en).filter((v) => v != null))] : [];
+  const fieldNumericLookup = buildFieldNumericLookup(opts.fieldNumericBounds);
 
   const ownVars = new Set(spec.map((r) => r.cdisc_variable));
   const scopedPresenceConditions = (presenceConditions || []).filter((pc) => ownVars.has(pc.cdisc_variable));
@@ -1578,8 +1608,10 @@ function buildRepeatedDomain(dm, spec, prefix, registrationStartDate, meddraData
           row[varName] = sampleOne(doseChoices);
         });
       } else {
+        // 数値バリデーション(min/max)を持つtext型項目(例: 分割数)は、DUMMYではなくその範囲内の整数にする
+        const numericBound = fieldNumericLookup.get(`${key}|${varName}`);
         rows.forEach((row) => {
-          row[varName] = "DUMMY";
+          row[varName] = numericBound ? generateNumericTextValue(numericBound) : "DUMMY";
         });
       }
     });
@@ -1768,6 +1800,7 @@ function buildOtherDomains(dm, cdiscVariableValues, registrationStartDate, meddr
       visitLookup,
       discontinuationDate,
       dateRefBounds,
+      fieldNumericBounds: opts.fieldNumericBounds || [],
       isExclusive: exclusivePrefixes.has(prefix),
       existingData: existingData || null,
       finalize: finalize !== false,

@@ -409,6 +409,7 @@ document.getElementById("generate-btn").addEventListener("click", async () => {
   const cdiscVariableValuesForOthers = excludeAeLinkedPrefixes(cdiscVariableValues, aeLinkedDomains);
   const otherDomains = buildOtherDomains(dm, cdiscVariableValuesForOthers, registrationStartDate, meddraData, presenceConditions, requiredVarInstances, numericBounds, fieldRefBounds, {
     builtDomains: { DM: dm, AE: ae, DS: ds },
+    fieldNumericBounds,
     ageBounds,
     multiRecordAliasNames,
     activeSheetTable,
