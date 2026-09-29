@@ -190,6 +190,21 @@ build_generation_constraints <- function(validator_table, df_cdisc, field_refere
               expected_value = clause[["values"]],
               condition_type = "equals"
             )
+          } else if (clause[["kind"]] == "field_name_ref") {
+            # "STAT=='NOT DONE'"のような接尾辞名参照。predicate(STAT.blank?)と同じく
+            # own_prefix+接尾辞で同一ブロック内のcdisc_variableを直接組み立てる
+            own_prefix <- field_to_prefix %>% filter(alias_name == .env$alias_name, field == .env$field_name) %>% pull(prefix) %>% unname()
+            if (length(own_prefix) == 0) return(tibble())
+            tibble(
+              cdisc_variable = cdisc_variable,
+              label = label,
+              alias_name = alias_name,
+              ref_cdisc_variable = str_c(own_prefix[1], clause[["suffix"]]),
+              ref_alias_name = alias_name,
+              ref_label = NA_character_,
+              expected_value = clause[["value"]],
+              condition_type = "equals"
+            )
           } else if (clause[["kind"]] == "field_numeric_cmp") {
             # fieldN>=数値のような、同一シート内の別フィールドの値との数値不等号比較(例:
             # "f16>=2"(骨壊死のGradeが2以上))。equals/not_blankと異なりref側の値を数値として

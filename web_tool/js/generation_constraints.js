@@ -254,12 +254,19 @@ const AND_FIELD_EQUALITY_RE = /^(?:field|f)([0-9]+)\s*==\s*(?:field|f)([0-9]+)$/
 // fieldN>=数値(または fN>=数値)のように、同一シート内の別フィールドの値を数値として不等号比較する形。
 // 例: "f16>=2&&STAT.blank?"(骨壊死のGrade(field16)が2以上のときだけ、かつSTATが空欄のときだけ提示)
 const AND_FIELD_NUMERIC_CMP_RE = /^(?:field|f)([0-9]+)\s*(>=|<=|>|<)\s*(-?[0-9]+(?:\.[0-9]+)?)$/;
+// "STAT == 'NOT DONE'"のように、フィールド番号ではなく接尾辞名(cdisc_variableからprefixを除いた部分。
+// PRESENCE_PREDICATE_REの".blank?/.present?"と同じ命名規則)で同じブロック内の別フィールドを参照し、
+// 特定の値と等しいことを条件にする形。"field"/"f"+数字で始まる場合はAND_FIELD_REF_RE等の
+// フィールド番号参照として先に判定されるため、ここに来るのは数字以外の識別子のみ
+const AND_FIELD_NAME_REF_RE = /^([A-Za-z_][A-Za-z0-9_]*)\s*==\s*(?:'([^']*)'|"([^"]*)"|([^\s|&()]+))$/;
 
 // parseAndClauses()で分割した1断片を種類ごとに分類する(Rのclassify_and_clause()に対応)
 //   - "fieldN==fieldM"のような、値側もフィールド参照のコピー条件
 //     -> kind="field_equality_skip"(別のcopy機構(extractFieldEqualityRef)で扱われるため、
 //        ここではpresenceConditions行を作らない)
 //   - "fieldN>=数値"のような、同一シート内の別フィールドの値との数値不等号比較 -> kind="field_numeric_cmp"
+//   - "STAT=='値'"のような、フィールド番号ではなく接尾辞名での同一ブロック内別フィールド参照
+//     -> kind="field_name_ref"
 //   - "fieldN==2 || fieldN==3 || ..."のような、断片自体が同一フィールドに対するOR条件
 //     (例: (field22==2||field22==3||...) && (field348=='CR'||field348=='PR'))
 //     -> kind="field_ref_or"(parsePresenceOrConditions()を再利用し、複数のexpected_valueを持つ)
@@ -274,6 +281,8 @@ function classifyAndClause(clause) {
   if (mField) return { kind: "field_ref", refField: `field${mField[1]}`, value: mField[2] ?? mField[3] ?? mField[4] };
   const mNum = clause.match(AND_FIELD_NUMERIC_CMP_RE);
   if (mNum) return { kind: "field_numeric_cmp", refField: `field${mNum[1]}`, operator: mNum[2], threshold: Number(mNum[3]) };
+  const mName = clause.match(AND_FIELD_NAME_REF_RE);
+  if (mName) return { kind: "field_name_ref", suffix: mName[1], value: mName[2] ?? mName[3] ?? mName[4] };
   const orParsed = parsePresenceOrConditions(clause);
   if (orParsed) return { kind: "field_ref_or", refField: orParsed.field, values: orParsed.values };
   return null;
@@ -605,6 +614,20 @@ function buildAndPresenceConditions(validatorTable, fieldLookup) {
               expected_value: clause.value,
               condition_type: "equals",
             });
+          });
+        } else if (clause.kind === "field_name_ref") {
+          // "STAT=='NOT DONE'"のような接尾辞名参照。predicate(STAT.blank?)と同じく
+          // own.prefix+接尾辞で同一ブロック内のcdisc_variableを直接組み立てる
+          if (own.prefix == null) return;
+          rows.push({
+            cdisc_variable: own.cdisc_variable,
+            label: own.label,
+            alias_name: vr.alias_name,
+            ref_cdisc_variable: `${own.prefix}${clause.suffix}`,
+            ref_alias_name: vr.alias_name,
+            ref_label: null,
+            expected_value: clause.value,
+            condition_type: "equals",
           });
         } else if (clause.kind === "field_ref_or") {
           // 断片自体がOR条件(例: field22==2||field22==3||...)の場合、同じref_cdisc_variableに対する

@@ -376,6 +376,11 @@ and_field_equality_pattern <- "^(?:field|f)([0-9]+)\\s*==\\s*(?:field|f)([0-9]+)
 # fieldN>=数値(または fN>=数値)のように、同一シート内の別フィールドの値を数値として不等号比較する形。
 # 例: "f16>=2&&STAT.blank?"(骨壊死のGrade(field16)が2以上のときだけ、かつSTATが空欄のときだけ提示)
 and_field_numeric_cmp_pattern <- "^(?:field|f)([0-9]+)\\s*(>=|<=|>|<)\\s*(-?[0-9]+(?:\\.[0-9]+)?)$"
+# "STAT == 'NOT DONE'"のように、フィールド番号ではなく接尾辞名(cdisc_variableからprefixを除いた部分。
+# presence_predicate_patternの".blank?/.present?"と同じ命名規則)で同じブロック内の別フィールドを参照し、
+# 特定の値と等しいことを条件にする形。"field"/"f"+数字で始まる場合はand_field_ref_pattern等の
+# フィールド番号参照として先に判定されるため、ここに来るのは数字以外の識別子のみ
+and_field_name_ref_pattern <- "^([A-Za-z_][A-Za-z0-9_]*)\\s*==\\s*(?:'([^']*)'|\"([^\"]*)\"|([^\\s|&()]+))$"
 
 # parse_and_clauses()で分割した1断片を種類ごとに分類する。対応する断片:
 #   - "STAT.blank?"/"STAT.present?"のような接尾辞述語 -> kind="predicate"
@@ -384,6 +389,7 @@ and_field_numeric_cmp_pattern <- "^(?:field|f)([0-9]+)\\s*(>=|<=|>|<)\\s*(-?[0-9
 #     (別のcopy機構(extract_field_equality_ref)で扱われるため、ここではpresence_conditions行を作らない)
 #   - "fieldN=='値'"のような同一シート内の別フィールド参照 -> kind="field_ref"
 #   - "fieldN>=数値"のような、同一シート内の別フィールドの値との数値不等号比較 -> kind="field_numeric_cmp"
+#   - "STAT=='値'"のような、フィールド番号ではなく接尾辞名での同一ブロック内別フィールド参照 -> kind="field_name_ref"
 #   - "fieldN==2 || fieldN==3 || ..."のような、断片自体が同一フィールドに対するOR条件
 #     (例: (field22==2||field22==3||...) && (field348=='CR'||field348=='PR'))
 #     -> kind="field_ref_or"(parse_presence_or_conditions()を再利用し、複数のexpected_valueを持つ)
@@ -413,6 +419,10 @@ classify_and_clause <- function(clause) {
   m_num <- str_match(clause, and_field_numeric_cmp_pattern)
   if (!is.na(m_num[1, 1])) {
     return(list(kind = "field_numeric_cmp", ref_field = str_c("field", m_num[1, 2]), operator = m_num[1, 3], threshold = as.numeric(m_num[1, 4])))
+  }
+  m_name <- str_match(clause, and_field_name_ref_pattern)
+  if (!is.na(m_name[1, 1])) {
+    return(list(kind = "field_name_ref", suffix = m_name[1, 2], value = coalesce(m_name[1, 3], m_name[1, 4], m_name[1, 5])))
   }
   or_parsed <- parse_presence_or_conditions(clause)
   if (!is.null(or_parsed)) {
