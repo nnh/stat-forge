@@ -700,8 +700,8 @@ check_rs_testcd(rs, "KPSS0101", "_1", fixed_value_checks_csv_path, eval_fixed = 
 check_rs_testcd(rs, "LPPSS101", "_2", fixed_value_checks_csv_path, eval_fixed = FALSE, rsdtc_required = TRUE)
 check_rs_testcd(rs, "REMSTAT", "_3", fixed_value_checks_csv_path, eval_fixed = TRUE, rsdtc_required = FALSE)
 
-# SUPPQUAL(registration)
-target_suppqual_cols <- c("SUPPQUALRDOMAIN", "SUPPQUALIDVAR", "SUPPQUALIDVARVAL", "SUPPQUALQNAM", "SUPPQUALQLABEL", "SUPPQUALQVAL", "SUPPQUALQORIG")
+# SUPPQUAL(registration)。QNAM/QLABEL/QVAL/QORIG等はCDISC SDTM標準上ドメイン名prefixを付けない
+target_suppqual_cols <- c("RDOMAIN", "IDVAR", "IDVARVAL", "QNAM", "QLABEL", "QVAL", "QORIG")
 suppqual %>% check_required_vars(target_suppqual_cols, domain_name = "SUPPQUAL")
 target_suppqual_cols %>%
   walk(~ run_value_equals_checks_from_csv(suppqual, "SUPPQUAL", .x, fixed_value_checks_csv_path))

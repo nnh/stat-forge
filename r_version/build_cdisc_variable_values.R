@@ -41,6 +41,9 @@ build_cdisc_variable_values <- function(edc_spec, sheets) {
   df_cdisc <- map_dfr(sheets, build_cdisc_sheet_config_table, .id = "sheet_index") %>%
     mutate(cdisc_variable = case_when(
       prefix == "DM" ~ value,
+      # SUPPQUALの変数(RDOMAIN/IDVAR/IDVARVAL/QNAM/QLABEL/QVAL/QORIG/QEVAL等)はCDISC SDTM標準上、
+      # 対象ドメインに関わらず固定の変数名を使う仕様のため、他ドメインと違いprefixを付けない
+      prefix == "SUPPQUAL" ~ value,
       value == "VISITNUM" ~ value,
       value == "SPDEVID" ~ value,
       TRUE ~ str_c(prefix, value)

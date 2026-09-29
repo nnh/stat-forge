@@ -18,9 +18,12 @@ function buildCdiscSheetConfigTable(sheet) {
       if (value == null || String(value).startsWith("_")) return;
       const item = fieldItems[fieldName];
       if (!item) return;
-      // prefixがDMの場合、またはvalueがVISITNUM/SPDEVIDの場合は、prefixを付けずそのままcdisc_variable名にする
-      // (build_cdisc_variable_values.Rのcase_whenに対応)
-      const cdiscVariable = prefix === "DM" || value === "VISITNUM" || value === "SPDEVID" ? value : prefix + value;
+      // prefixがDM/SUPPQUALの場合、またはvalueがVISITNUM/SPDEVIDの場合は、prefixを付けずそのまま
+      // cdisc_variable名にする(build_cdisc_variable_values.Rのcase_whenに対応)。SUPPQUALの変数
+      // (RDOMAIN/IDVAR/IDVARVAL/QNAM/QLABEL/QVAL/QORIG/QEVAL等)はCDISC SDTM標準上、対象ドメインに
+      // 関わらず固定の変数名を使う仕様のため、他ドメインと違いprefixを付けない
+      const cdiscVariable =
+        prefix === "DM" || prefix === "SUPPQUAL" || value === "VISITNUM" || value === "SPDEVID" ? value : prefix + value;
       rows.push({
         prefix,
         cdisc_variable: cdiscVariable,

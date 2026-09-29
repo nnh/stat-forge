@@ -1197,11 +1197,15 @@ function buildGenericDomain(dm, spec, prefix, registrationStartDate, meddraData,
     alias_name: row.alias_name,
   }));
 
+  // SUPPQUALはCDISC SDTM標準上SEQ/SPID変数を持たないため、他ドメインと違い付与しない
+  const isSuppqual = prefix === "SUPPQUAL";
   const spidVar = `${prefix}SPID`;
-  data.forEach((row) => {
-    row[spidVar] = row.alias_name;
-  });
-  data = applyMultiRecordSpid(data, spidVar, multiRecordAliasNames);
+  if (!isSuppqual) {
+    data.forEach((row) => {
+      row[spidVar] = row.alias_name;
+    });
+    data = applyMultiRecordSpid(data, spidVar, multiRecordAliasNames);
+  }
 
   // dateRefBoundsが他ドメインの日付列を参照する場合、populateGenericDateFields()より前にbuiltDomains
   // から該当列を結合しておく(そうしないと生成時点でref_cdisc_variableがdataの列に無く、下限/上限制約が
@@ -1234,8 +1238,8 @@ function buildGenericDomain(dm, spec, prefix, registrationStartDate, meddraData,
   const seqVar = `${prefix}SEQ`;
   // wave分割していない(existingData無し)通常時は、従来通りここでSEQ相当の連番を振る。
   // wave分割時は、後段でexistingData(前wave分)と結合してから、finalize=trueのタイミングで
-  // まとめて振る(通しの連番にするため)
-  if (!existingData) {
+  // まとめて振る(通しの連番にするため)。SUPPQUALはSEQを持たないため対象外
+  if (!existingData && !isSuppqual) {
     addSeq(data, seqVar);
   }
 
@@ -1285,7 +1289,7 @@ function buildGenericDomain(dm, spec, prefix, registrationStartDate, meddraData,
   if (existingData) {
     data = [...existingData, ...data];
   }
-  if (existingData && finalize) {
+  if (existingData && finalize && !isSuppqual) {
     addSeq(data, seqVar);
   }
   if (!finalize) {

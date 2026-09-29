@@ -2156,9 +2156,13 @@ build_generic_domain <- function(dm, spec, prefix, registration_start_date, medd
     left_join(dm %>% select(USUBJID, STUDYID), by = "USUBJID")
   data[["DOMAIN"]] <- prefix
 
+  # SUPPQUALはCDISC SDTM標準上SEQ/SPID変数を持たないため、他ドメインと違い付与しない
+  is_suppqual <- prefix == "SUPPQUAL"
   spid_var <- str_c(prefix, "SPID")
-  data[[spid_var]] <- data[["alias_name"]]
-  data <- data %>% apply_multi_record_spid(spid_var, multi_record_alias_names)
+  if (!is_suppqual) {
+    data[[spid_var]] <- data[["alias_name"]]
+    data <- data %>% apply_multi_record_spid(spid_var, multi_record_alias_names)
+  }
 
   target_vars <- compute_target_vars(data %>% select(-alias_name), spec)
   seq_var <- str_c(prefix, "SEQ")
@@ -2196,8 +2200,8 @@ build_generic_domain <- function(dm, spec, prefix, registration_start_date, medd
 
   # wave分割していない(existing_data無し)通常時は、従来通りここでDSSEQ相当の連番を振る。
   # wave分割時は、後段でexisting_data(前wave分)と結合してから、finalize=TRUEのタイミングで
-  # まとめて振る(通しの連番にするため)
-  if (is.null(existing_data)) {
+  # まとめて振る(通しの連番にするため)。SUPPQUALはSEQを持たないため対象外
+  if (is.null(existing_data) && !is_suppqual) {
     data <- data %>% add_seq(seq_var)
   }
 
@@ -2242,7 +2246,7 @@ build_generic_domain <- function(dm, spec, prefix, registration_start_date, medd
   # (existing_dataがNULLなら何もしない=従来通り)。まだfinalizeでなければ、次waveのexisting_dataとして
   # 使えるようalias_name列を保持したまま返す
   data <- bind_rows(existing_data, data)
-  if (!is.null(existing_data) && finalize) {
+  if (!is.null(existing_data) && finalize && !is_suppqual) {
     data <- data %>% add_seq(seq_var)
   }
   if (!finalize) {
