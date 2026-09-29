@@ -435,6 +435,11 @@ document.getElementById("generate-btn").addEventListener("click", async () => {
     VS: (d) => populateVsOrres(d, cdiscVariableValues, fieldNumericBounds),
     FA: (d) => populateFaOrres(d, cdiscVariableValues, fieldNumericBounds),
   });
+  // *DOSE項目を、TRT(例: CMTRT/PRTRT)ごとの数値バリデーション(min/max)に基づいたそれらしい
+  // 数値に置き換える(ORRESと同じ理由。*TRT列を持たないドメインやTRTごとの範囲が未定義の場合は無処理)
+  Object.keys(otherDomains).forEach((prefix) => {
+    otherDomains[prefix] = populateDoseRealism(otherDomains[prefix], cdiscVariableValues, fieldNumericBounds, whoDrugIdf);
+  });
   // prefixSEQ列を持つドメインは、その列で行を並べ替えておく(mergeやfilter等で崩れた行順を
   // 最終出力前に揃えるため)
   Object.keys(otherDomains).forEach((prefix) => {

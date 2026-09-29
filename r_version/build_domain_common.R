@@ -938,6 +938,69 @@ generate_orres_value <- function(testcd, testcd_bounds) {
   value
 }
 
+# DOSE(用量)項目を、EDC仕様の数値バリデーション(min/max)に基づいたそれらしい数値に置き換える。
+# populate_dose_fields()/build_repeated_domain()側のDOSE生成は、変数名が"DOSE"で終わることだけを
+# 条件にハードコードされた候補値(50〜500)から選ぶため、その項目本来の範囲を超えることがある
+# (例: PRDOSE=照射線量は仕様上1〜30Gyだが、CM向けの候補値がそのまま使われてしまう)。
+# LB/TR/VS/FAのORRES同様、TESTCDの代わりにTRT(例: CMTRT/PRTRT)をキーにして範囲を引く
+
+# field_numeric_boundsをtrt_varの値をキーにした対応表に変換する。build_testcd_numeric_boundsと
+# 同じ考え方だが、trt_varがfield_type=="drug"の場合、cdisc_variable_valuesのdefault_valueは
+# WHO Drugコードであり実際のデータ列にはその薬剤名(full_name_en、無ければgeneric_name_enへの
+# フォールバック名)が入るため、マップの鍵として使う前にwho_drug_idfで解決する
+build_trt_numeric_bounds <- function(cdisc_variable_values, field_numeric_bounds, trt_var, dose_var, who_drug_idf) {
+  trt_rows <- cdisc_variable_values %>% filter(cdisc_variable == trt_var, !is.na(default_value), default_value != "")
+  trt_rows[["trt_value"]] <- trt_rows[["default_value"]]
+  is_drug_code <- trt_rows[["field_type"]] == "drug" & str_detect(trt_rows[["default_value"]], "^[0-9]+$")
+  if (any(is_drug_code) && !is.null(who_drug_idf)) {
+    codes <- trt_rows[["default_value"]][is_drug_code]
+    resolved <- codes %>% map_chr(function(code) {
+      matched_drug <- who_drug_idf %>% filter(drug_code == code)
+      full_name <- matched_drug %>% pull(full_name_en) %>% discard(is.na) %>% unique()
+      if (length(full_name) >= 1) {
+        full_name[1]
+      } else {
+        generic_name <- matched_drug %>% pull(generic_name_en) %>% discard(is.na) %>% unique()
+        if (length(generic_name) >= 1) generic_name[1] else code
+      }
+    })
+    trt_rows[["trt_value"]][is_drug_code] <- resolved
+  }
+  trt_map <- trt_rows %>% distinct(alias_name, label, trt = trt_value)
+  field_numeric_bounds %>%
+    filter(cdisc_variable == dose_var) %>%
+    inner_join(trt_map, by = c("alias_name", "label")) %>%
+    distinct(trt, min_value, max_value)
+}
+
+# dataの中から"*DOSE"列を持ち、対応する"*TRT"列(DOSEをTRTに置き換えた変数名。例: CMDOSE→CMTRT)も
+# 持つものだけを対象に、行のTRT値に対応する範囲を外れているDOSE値だけを生成し直す。TRTに対応する
+# 範囲が定義されていない場合、およびtrt_var列自体が無いdose_varは対象外(元の値のまま)とする
+populate_dose_realism <- function(data, cdisc_variable_values, field_numeric_bounds, who_drug_idf) {
+  if (is.null(data) || nrow(data) == 0) {
+    return(data)
+  }
+  dose_vars <- colnames(data)[str_detect(colnames(data), "DOSE$")]
+  for (dose_var in dose_vars) {
+    trt_var <- str_replace(dose_var, "DOSE$", "TRT")
+    if (!(trt_var %in% colnames(data))) next
+    trt_bounds <- build_trt_numeric_bounds(cdisc_variable_values, field_numeric_bounds, trt_var, dose_var, who_drug_idf)
+    if (nrow(trt_bounds) == 0) next
+    bound_idx <- match(data[[trt_var]], trt_bounds[["trt"]])
+    current <- suppressWarnings(as.numeric(data[[dose_var]]))
+    min_v <- trt_bounds[["min_value"]][bound_idx]
+    max_v <- trt_bounds[["max_value"]][bound_idx]
+    needs_regen <- !is.na(bound_idx) & !is.na(data[[dose_var]]) & data[[dose_var]] != "" &
+      (is.na(current) | (!is.na(min_v) & current < min_v) | (!is.na(max_v) & current > max_v))
+    if (any(needs_regen)) {
+      lo <- coalesce(min_v[needs_regen], 0)
+      hi <- coalesce(max_v[needs_regen], lo + 100)
+      data[[dose_var]][needs_regen] <- as.character(round(runif(sum(needs_regen), lo, hi)))
+    }
+  }
+  data
+}
+
 # presence_conditions/field_ref_boundsのうち、cdisc_variableとref_cdisc_variableのprefixが異なる
 # (=ドメインをまたぐ参照)行から、(from, to)の依存エッジ一覧を作る。fromはtoに依存する(toを先に生成する必要がある)
 build_cross_prefix_edges <- function(presence_conditions, field_ref_bounds, cdisc_variable_to_prefix, age_bounds = NULL, date_ref_bounds = NULL) {

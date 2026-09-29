@@ -193,6 +193,11 @@ load_edc_spec <- function(json_path) {
     FA = function(d) populate_fa_orres(d, cdisc_variable_values, field_numeric_bounds)
   ))
 
+  # *DOSE項目を、TRT(例: CMTRT/PRTRT)ごとの数値バリデーション(min/max)に基づいたそれらしい
+  # 数値に置き換える(ORRESと同じ理由。*TRT列を持たないドメインやTRTごとの範囲が未定義の場合は無処理)
+  other_domains <- other_domains %>%
+    map(~ populate_dose_realism(.x, cdisc_variable_values, field_numeric_bounds, who_drug_idf))
+
   # DD(死因)は死亡した被験者のみのレコードにする(DDTEST/DDTESTCDのような固定値の列ではなく、
   # presence_conditionsで条件付けされている列(例: DDORRES)が全てNAの行を除外)
   if ("DD" %in% names(other_domains)) {
