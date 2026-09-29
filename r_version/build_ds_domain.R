@@ -75,14 +75,19 @@ populate_ds_domain <- function(ds, cdisc_variable_values, registration_start_dat
   date_injected <- inject_cross_domain_refs(ds, NULL, NULL, built_domains, cdisc_variable_to_prefix, NULL, ds_date_ref_bounds)
   ds <- date_injected[["data"]]
 
+  # DSの日付(中止日・脱落日等)がDMのRFICDTC(同意取得日)・BRTHDTC(生年月日)より前にならないよう、
+  # 被験者ごとの下限を一時列として持たせる(populate_date_fields()のrow_lower_bound_col)
+  ds_lower_col <- ".ds_date_lower_bound"
+  ds <- add_subject_lower_bound_col(ds, built_domains[["DM"]], ds_lower_col)
+
   ds <- ds %>%
     populate_radio_button_fields(ds_spec, target_vars, numeric_bounds) %>%
-    populate_date_fields(ds_spec, target_vars, registration_start_date, date_ref_bounds) %>%
+    populate_date_fields(ds_spec, target_vars, registration_start_date, date_ref_bounds, row_lower_bound_col = ds_lower_col) %>%
     # DSが複数のalias(シート、例: "discon"/"withdrawal")にまたがる場合、シートの本来の並び順
     # (sheet_seq)に沿うようalias単位でまとめて日付をシフトする
     reorder_dates_by_sheet_seq(ds_date_vars, ds_spec, registration_start_date, date_ref_bounds = ds_date_ref_bounds) %>%
     populate_dummy_fields(target_vars) %>%
-    select(-any_of(date_injected[["injected_cols"]]))
+    select(-any_of(c(date_injected[["injected_cols"]], ds_lower_col)))
 
   # DSSEQはUSUBJID・DSSTDTC・sheet_seq(シートの本来の並び順)の昇順で振る
   ds <- ds %>% sort_ds_for_seq() %>% add_seq("DSSEQ")

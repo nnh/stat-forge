@@ -120,7 +120,7 @@ function populateDsChoiceFields(ds, dsSpec, numericBounds) {
 // has_alias_name==TRUEの分岐に対応)。dateRefBoundsが渡された場合、validate_date_after_or_equal_to/
 // validate_date_before_or_equal_to(他フィールド参照、例: DSDTC>=DSSTDTC)による下限/上限
 // (参照先フィールドの値、同じ行)を一律の範囲より優先する
-function populateDsDateFields(ds, dsSpec, registrationStartDate, dateRefBounds) {
+function populateDsDateFields(ds, dsSpec, registrationStartDate, dateRefBounds, lowerBoundByUsubjid) {
   const existingColumns = new Set(Object.keys(ds[0] || {}));
   let dateVars = [...new Set(dsSpec.filter((r) => r.field_type === "date").map((r) => r.cdisc_variable))].filter(
     (v) => !existingColumns.has(v)
@@ -140,6 +140,9 @@ function populateDsDateFields(ds, dsSpec, registrationStartDate, dateRefBounds) 
         return;
       }
       let lower = registrationStartDate;
+      // RFICDTC(同意取得日)・BRTHDTC(生年月日)より前の日付にならないよう、被験者ごとの下限を適用する
+      const subjectLower = lowerBoundByUsubjid ? lowerBoundByUsubjid[row.USUBJID] : null;
+      if (subjectLower != null && subjectLower > lower) lower = subjectLower;
       if (minRow != null && row[minRow.ref_cdisc_variable] != null && row[minRow.ref_cdisc_variable] > lower) {
         lower = row[minRow.ref_cdisc_variable];
       }
@@ -245,7 +248,7 @@ function populateDsDomain(ds, cdiscVariableValues, registrationStartDate, meddra
   ds = dateInjected.data;
 
   ds = populateDsChoiceFields(ds, dsSpec, numericBounds);
-  ds = populateDsDateFields(ds, dsSpec, registrationStartDate, dateRefBounds);
+  ds = populateDsDateFields(ds, dsSpec, registrationStartDate, dateRefBounds, buildSubjectLowerBounds(builtDomains.DM));
   // DSが複数のalias(シート、例: "discon"/"withdrawal")にまたがる場合、シートの本来の並び順
   // (sheet_seq)に沿うようalias単位でまとめて日付をシフトする
   ds = reorderDatesBySheetSeq(ds, dsDateVars, dsSpec, registrationStartDate, null, dsDateRefBounds);

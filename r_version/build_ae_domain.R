@@ -57,7 +57,10 @@ populate_ae_domain <- function(ae, cdisc_variable_values, registration_start_dat
   # RFSTDTC(症例登録日)がある場合、明示的なref()参照(date_ref_bounds)を持たない日付項目の下限を
   # registration_start_date(試験共通の定数)ではなく被験者本人のRFSTDTCにする(build_ae_domain()で
   # 結合済み。populate_date_fields()内のhas_rfstdtc分岐が判定する)
-  ae <- populate_date_fields(ae, ae_spec, ae_date_vars, registration_start_date, ae_date_ref_bounds)
+  # RFICDTC(同意取得日)・BRTHDTC(生年月日)より前の日付にならないよう、被験者ごとの下限を一時列として持たせる
+  ae_lower_col <- ".ae_date_lower_bound"
+  ae <- add_subject_lower_bound_col(ae, built_domains[["DM"]], ae_lower_col)
+  ae <- populate_date_fields(ae, ae_spec, ae_date_vars, registration_start_date, ae_date_ref_bounds, row_lower_bound_col = ae_lower_col)
 
   # AE報告が複数のalias(シート、例: "sae_report"/"ae2")にまたがる場合、シートの本来の並び順
   # (sheet_seq)に沿うようalias単位でまとめて日付をシフトする(同じ行のAESTDTC<=AEENDTCの関係は保つ)。
@@ -69,7 +72,7 @@ populate_ae_domain <- function(ae, cdisc_variable_values, registration_start_dat
   # 修復する。参照列(MHSTDTC等)が必要なため、injected_colsを取り除くのはこの後にする
   ae <- reorder_dates_by_sheet_seq(ae, ae_date_vars, ae_spec, registration_start_date, date_ref_bounds = ae_date_ref_bounds)
   ae <- reclamp_ae_dates_to_ref_bounds(ae, ae_date_vars, ae_date_ref_bounds)
-  ae <- ae %>% select(-any_of(date_injected[["injected_cols"]]))
+  ae <- ae %>% select(-any_of(c(date_injected[["injected_cols"]], ae_lower_col)))
 
   # meddra: field_type=="meddra"に該当する変数はLLT名を直接格納し、MedDRAコーディングブロック(LLT〜SOC)を追加
   meddra_vars <- compute_meddra_vars(ae_spec, target_vars)

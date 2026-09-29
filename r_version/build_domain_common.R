@@ -229,7 +229,24 @@ resolve_date_ref_bound_vals <- function(data, date_ref_bounds, var_name, bound_t
 # 定義しているalias_nameが違えば日付を入れず、そのcdisc_variableを実際に定義しているalias_nameの
 # 行だけに絞って生成する(例: CMドメインで"concomitant_drug"にしか無いCMSTDTCが、
 # それを定義していない"baseline1"の行にまで入ってしまうのを防ぐ)
-populate_date_fields <- function(data, spec, target_vars, registration_start_date, date_ref_bounds = NULL, existing_data = NULL) {
+# dm(RFICDTC/BRTHDTC)から、被験者ごとの日付生成の下限(RFICDTC(同意取得日)とBRTHDTC(生年月日)の遅い方)を
+# 一時列としてdataに結合する。populate_date_fields()のrow_lower_bound_colに渡す。DS/AE等、同意取得前・
+# 出生前の日付になってはならないドメインの日付生成で使う。dmが無い場合は何もしない
+add_subject_lower_bound_col <- function(data, dm, col_name) {
+  if (is.null(dm)) {
+    return(data)
+  }
+  dm_lower <- dm %>%
+    transmute(USUBJID, lower_bound = pmax(
+      if ("RFICDTC" %in% colnames(dm)) as.Date(RFICDTC) else as.Date(NA),
+      if ("BRTHDTC" %in% colnames(dm)) as.Date(BRTHDTC) else as.Date(NA),
+      na.rm = TRUE
+    ))
+  data[[col_name]] <- as.character(dm_lower[["lower_bound"]][match(data[["USUBJID"]], dm_lower[["USUBJID"]])])
+  data
+}
+
+populate_date_fields <- function(data, spec, target_vars, registration_start_date, date_ref_bounds = NULL, existing_data = NULL, row_lower_bound_col = NULL) {
   date_vars <- spec %>%
     filter(field_type == "date") %>%
     pull(cdisc_variable) %>%
@@ -262,11 +279,18 @@ populate_date_fields <- function(data, spec, target_vars, registration_start_dat
   # 下限を「登録開始日とBRTHDTCの遅い方」にする(小児等でBRTHDTCが登録開始日より後になる場合、
   # 「生まれる前に同意している」といった矛盾が生じるのを防ぐ)。generate_random_date()の
   # start_date引数は列名の文字列も受け付けるため、計算結果を一時列として持たせて渡す
+  # row_lower_bound_col(行ごとの追加の下限を持つ列名。例: DSの中止日等が同意取得日より前にならないようにする
+  # ためのRFICDTC由来の列)が指定された場合も、同じ一時列に含めて下限とする
   has_brthdtc <- "BRTHDTC" %in% colnames(data)
-  if (has_brthdtc) {
-    data[["__date_lower_bound"]] <- as.character(pmax(as.Date(registration_start_date), as.Date(data[["BRTHDTC"]]), na.rm = TRUE))
+  has_row_lower <- !is.null(row_lower_bound_col) && row_lower_bound_col %in% colnames(data)
+  has_lower_col <- has_brthdtc || has_row_lower
+  if (has_lower_col) {
+    lower_base <- rep(as.Date(registration_start_date), nrow(data))
+    if (has_brthdtc) lower_base <- pmax(lower_base, as.Date(data[["BRTHDTC"]]), na.rm = TRUE)
+    if (has_row_lower) lower_base <- pmax(lower_base, as.Date(data[[row_lower_bound_col]]), na.rm = TRUE)
+    data[["__date_lower_bound"]] <- as.character(lower_base)
   }
-  start_bound <- if (has_brthdtc) "__date_lower_bound" else registration_start_date
+  start_bound <- if (has_lower_col) "__date_lower_bound" else registration_start_date
   # RFSTDTC(症例登録日、他ドメインではinject_cross_domain_refs等で結合されている場合がある)は、
   # 明示的なref()参照(min_ref_vals)を持たない変数だけのデフォルト下限として使う(下のループ内)。
   # min_ref_vals(例: MHSTDTCのBRTHDTC基準)がある変数にまで一律にRFSTDTCを加えると、
@@ -323,7 +347,7 @@ populate_date_fields <- function(data, spec, target_vars, registration_start_dat
     }
   }
 
-  if (has_brthdtc) {
+  if (has_lower_col) {
     data[["__date_lower_bound"]] <- NULL
   }
   data <- data %>% select(-starts_with("__date_lower_bound__"), -starts_with("__date_upper_bound__"))
@@ -1597,6 +1621,10 @@ reorder_dates_by_sheet_seq <- function(data, date_vars, cdisc_variable_values, r
     }
     new_dates <- as.Date(data[[var_name]][has_val]) + data[["delta"]][has_val]
     new_dates <- pmin(pmax(new_dates, row_lower_bound[has_val]), row_upper_bound[has_val])
+    # 中止日(row_upper_bound)がBRTHDTCより前という矛盾したデータでも、生物学的な下限であるBRTHDTCを優先する
+    if ("BRTHDTC" %in% colnames(data)) {
+      new_dates <- pmax(new_dates, as.Date(data[["BRTHDTC"]][has_val]), na.rm = TRUE)
+    }
     data[[var_name]][has_val] <- as.character(new_dates)
   }
 
@@ -1726,6 +1754,22 @@ clamp_dates_to_discontinuation <- function(data, date_vars, registration_start_d
       # 場合(例: 登録日が中止日より後という、この日付項目固有の参照とは無関係な実データ上の事情)は
       # 対象にせず、従来通りhard_upperまで切り詰める
       has_min_ref <- if (!is.null(min_ref_vals)) !is.na(min_ref_vals[over]) else rep(FALSE, sum(over))
+      # 中止日が理由で有効範囲が消えている行(後療法等、参照先の日付(lowerの根拠)自体が既に
+      # 被験者の中止日より後になっているケース)は、その項目が中止後に妥当に発生しうることを意味する
+      # だけで、本当に無効な範囲というわけではない。中止日による上限を外し、代わりに「今日」
+      # (max_ref_valsがあればそちらも考慮)を上限として救済を試みる。中止日を外しても尚範囲が無い
+      # 場合のみ、以降のinfeasible判定で従来通り未入力(NA)にする
+      rescued <- rep(FALSE, sum(over))
+      narrowed_by_discon <- (hard_upper < lower) & has_min_ref & !is.na(discon_over_vals)
+      if (any(narrowed_by_discon)) {
+        hard_upper_no_discon <- rep(as.Date(Sys.Date()), sum(over))
+        if (!is.null(max_ref_vals)) {
+          hard_upper_no_discon <- pmin(hard_upper_no_discon, max_ref_vals[over], na.rm = TRUE)
+        }
+        rescuable <- narrowed_by_discon & (hard_upper_no_discon >= lower)
+        hard_upper[rescuable] <- hard_upper_no_discon[rescuable]
+        rescued[rescuable] <- TRUE
+      }
       # 有効な日付範囲が存在しない行(オフセット付き参照の参照先が生成順序上まだ結合されておらず、
       # 生成時点では下限が緩く見えていたが、後段でクロスドメイン参照が解決されて厳しい下限が判明し、
       # それが今日/中止日を超えてしまった)は、無理に未来日等で上書きせず未入力(NA)に戻す。
@@ -1758,12 +1802,14 @@ clamp_dates_to_discontinuation <- function(data, date_vars, registration_start_d
         lower <- lower[!infeasible]
         hard_upper <- hard_upper[!infeasible]
         discon_over_vals <- discon_over_vals[!infeasible]
+        rescued <- rescued[!infeasible]
         over <- over & !infeasible_mask
       }
       if (length(lower) > 0) {
         # 通常のケース(有効な範囲は存在する): 上限はhard_upperを超えない範囲で、可能な限り既存値
-        # (current)を尊重する(discon超過のみが理由の場合、既存値に近い日付に再サンプルするため)
-        upper <- as.Date(ifelse(is.na(discon_over_vals), as.character(current[over]), as.character(hard_upper)))
+        # (current)を尊重する(discon超過のみが理由の場合、既存値に近い日付に再サンプルするため)。
+        # ただしrescuedな行は中止日制約そのものを外して救済しているため、既存値には寄せない
+        upper <- as.Date(ifelse(is.na(discon_over_vals) & !rescued, as.character(current[over]), as.character(hard_upper)))
         upper <- pmin(upper, hard_upper)
         upper <- pmax(upper, lower)
         new_dates <- lower + floor(runif(length(lower), 0, as.numeric(upper - lower) + 1))

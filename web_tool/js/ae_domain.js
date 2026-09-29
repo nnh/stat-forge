@@ -124,7 +124,7 @@ function populateAeDateFields(ae, aeSpec, registrationStartDate, dateRefBoundsAl
 
   const injected = injectCrossDomainRefs(ae, null, null, builtDomains || {}, cdiscVariableToPrefix || {}, null, aeDateRefBounds, "AE");
   ae = injected.data;
-  ae = populateGenericDateFields(ae, aeSpec, registrationStartDate, aeDateRefBounds, null);
+  ae = populateGenericDateFields(ae, aeSpec, registrationStartDate, aeDateRefBounds, null, buildSubjectLowerBounds((builtDomains || {}).DM));
 
   // AE報告が複数のalias(シート、例: "sae_report"/"ae2")にまたがる場合、シートの本来の並び順
   // (sheet_seq)に沿うようalias単位でまとめて日付をシフトする(同じ行のAESTDTC<=AEENDTCの関係は保つ)。

@@ -634,7 +634,7 @@ function injectDmRfstdtc(data, builtDomains) {
   return { data, injected: true };
 }
 
-function populateGenericDateFields(data, spec, registrationStartDate, dateRefBounds, existingData) {
+function populateGenericDateFields(data, spec, registrationStartDate, dateRefBounds, existingData, lowerBoundByUsubjid) {
   const existingColumns = new Set(Object.keys(data[0] || {}));
   let dateVars = [...new Set(spec.filter((r) => r.field_type === "date").map((r) => r.cdisc_variable))].filter(
     (v) => !existingColumns.has(v)
@@ -652,6 +652,10 @@ function populateGenericDateFields(data, spec, registrationStartDate, dateRefBou
         return;
       }
       let lower = registrationStartDate;
+      // lowerBoundByUsubjid(RFICDTC・BRTHDTC由来の被験者ごとの下限)が渡された場合は、明示的な参照の
+      // 有無によらず常に守るべき下限として適用する
+      const subjectLower = lowerBoundByUsubjid ? lowerBoundByUsubjid[row.USUBJID] : null;
+      if (subjectLower != null && subjectLower > lower) lower = subjectLower;
       // RFSTDTC(症例登録日)は、この変数に明示的なmin_date参照(minRefVals)が無い場合の
       // デフォルト下限としてのみ使う。明示的な参照がある変数にまで一律にRFSTDTCを下限に加えると、
       // その変数本来の(RFSTDTCより前を許容する)意味を壊してしまうため
@@ -882,6 +886,20 @@ function clampDatesToDiscontinuation(data, dateVars, registrationStartDate, disc
         // しているだけ)。真に有効な範囲が無いかどうかはhardUpperとlowerで判定する
         let hardUpper = discon != null ? (discon > registrationStartDate ? discon : registrationStartDate) : today;
         if (maxVal != null && maxVal < hardUpper) hardUpper = maxVal;
+        // 中止日が理由で有効範囲が消えている場合(後療法等、参照先の日付(lowerの根拠)自体が既に
+        // 被験者の中止日より後になっているケース)は、その項目が中止後に妥当に発生しうることを意味する
+        // だけで、本当に無効な範囲というわけではない。中止日による上限を外し、代わりに「今日」
+        // (maxValがあればそちらも考慮)を上限として救済を試みる。中止日を外しても尚範囲が無い場合のみ、
+        // 下のif節で従来通り未入力(null)にする
+        let rescued = false;
+        if (hardUpper < lower && minVal != null && discon != null) {
+          let hardUpperNoDiscon = today;
+          if (maxVal != null && maxVal < hardUpperNoDiscon) hardUpperNoDiscon = maxVal;
+          if (hardUpperNoDiscon >= lower) {
+            hardUpper = hardUpperNoDiscon;
+            rescued = true;
+          }
+        }
         // minVal(date_ref_boundsの明示的なmin_date参照)が実際に効いてlowerを押し上げているときだけ
         // 「有効な範囲が無い」と判定する。RFSTDTC/BRTHDTCのデフォルト下限だけでhardUpperを超える場合
         // (例: 登録日が中止日より後という別の既存の実データ上の事情)は、この日付項目固有の問題では
@@ -902,8 +920,9 @@ function clampDatesToDiscontinuation(data, dateVars, registrationStartDate, disc
           return;
         }
         // 通常のケース(有効な範囲は存在する): 上限はhardUpperを超えない範囲で、可能な限り既存値
-        // (current)を尊重する(discon超過のみが理由の場合、既存値に近い日付に再サンプルするため)
-        let upper = discon != null ? hardUpper : current;
+        // (current)を尊重する(discon超過のみが理由の場合、既存値に近い日付に再サンプルするため)。
+        // ただしrescuedな行は中止日制約そのものを外して救済しているため、既存値には寄せない
+        let upper = discon != null && !rescued ? hardUpper : current;
         if (upper > hardUpper) upper = hardUpper;
         if (upper < lower) upper = lower;
         row[varName] = randomDateBetween(lower, upper);
