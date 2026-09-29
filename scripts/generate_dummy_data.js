@@ -34,7 +34,7 @@ if (!fs.existsSync(jsonPath)) {
   process.exit(1);
 }
 
-const htmlPath = path.join(repoRoot, "FORGE ver1.0.html");
+const htmlPath = path.join(repoRoot, "FORGE ver1.1.html");
 log(`起動ファイル: ${htmlPath}`);
 log(`EDC仕様JSON: ${path.resolve(jsonPath)}`);
 
