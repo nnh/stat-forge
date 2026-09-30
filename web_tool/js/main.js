@@ -41,11 +41,40 @@ document.querySelectorAll(".integer-input").forEach((el) => {
   el.addEventListener("compositionend", () => sanitizeIntegerInputValue(el));
 });
 
+const VERSION_MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+
+// バージョン名を比較用の数値配列に変換する(例: "29.1" -> [29, 1]、"2025 Sep 1" -> [2025, 9, 1])。
+// 数値・月名(英語3文字)以外を含む場合はnullを返す
+function parseVersionLabel(label) {
+  const parts = label.trim().split(/[\s._-]+/).map((token) => {
+    const monthIndex = VERSION_MONTHS.indexOf(token.slice(0, 3).toLowerCase());
+    if (monthIndex >= 0) return monthIndex + 1;
+    return /^\d+$/.test(token) ? Number(token) : NaN;
+  });
+  return parts.some(Number.isNaN) ? null : parts;
+}
+
+// バージョン名を新しい順に並べるための比較関数。
+// 解釈できないバージョン名同士は文字列(数字部分は数値)として比較する
+function compareVersionLabelsDesc(a, b) {
+  const pa = parseVersionLabel(a);
+  const pb = parseVersionLabel(b);
+  if (pa && pb) {
+    for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+      const diff = (pb[i] ?? 0) - (pa[i] ?? 0);
+      if (diff !== 0) return diff;
+    }
+    return 0;
+  }
+  return b.localeCompare(a, undefined, { numeric: true });
+}
+
 // MedDRA/WHO Drugのバージョン選択プルダウンをlabelsの一覧で埋める。
-// 末尾(最新)をデフォルト選択にする
+// 新しい順に並べ、先頭(最新)をデフォルト選択にする
 function populateVersionSelectFromLabels(selectId, labels) {
   const select = document.getElementById(selectId);
   select.innerHTML = "";
+  labels = [...labels].sort(compareVersionLabelsDesc);
   labels.forEach((label) => {
     const option = document.createElement("option");
     option.value = label;
@@ -53,7 +82,7 @@ function populateVersionSelectFromLabels(selectId, labels) {
     select.appendChild(option);
   });
   if (labels.length > 0) {
-    select.value = labels[labels.length - 1];
+    select.value = labels[0];
   }
 }
 

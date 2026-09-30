@@ -102,7 +102,7 @@ r_version/
 ## Web版生成の自動化(Playwright)
 
 `scripts/generate_dummy_data.js` で、Web版の「JSON読み込み→生成→ZIPで一括ダウンロード→展開」を自動化できる。
-辞書(MedDRA/WHO Drug)は `web_tool/data/versions.js` に登録済みのバージョン(プルダウンのデフォルト=末尾/最新)を使う。
+辞書(MedDRA/WHO Drug)は `web_tool/data/versions.js` に登録済みのバージョン(プルダウンのデフォルト=先頭/最新)を使う。
 辞書バージョンの新規登録(D&D、ネイティブのフォルダ選択ダイアログを使う操作)は自動化の対象外なので、事前に手動で登録しておくこと。
 
 ### 必要な環境
