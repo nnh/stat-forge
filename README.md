@@ -19,7 +19,7 @@ EDC仕様JSON(.json)から、統計解析プログラムの開発・検証用に
 - 辞書のバージョン更新時など、必要になったときだけ行う作業(頻度は半年に1回程度)
 - `web_tool/data/meddra/`・`web_tool/data/who_drug/` にバージョンごとの変換済みJSファイルを置く
 - ライセンス上リポジトリに再配布できないため、フォルダ自体はgit管理下だが中身は`.gitignore`対象
-- 登録方法: 「辞書バージョンの登録・管理」からフォルダをD&D
+- 登録方法: 「辞書バージョンの登録・管理」からフォルダをD&D。または、SE-Assistant-Workbench(WHO-DD_IDF_Update)の辞書更新処理を実行すると、`kForgeDataDir`で指定したフォルダに自動で出力される
 
 ### 制限事項
 
@@ -89,8 +89,6 @@ r_version/
 │                                   # LB/TR/VS/FAのORRESを数値バリデーションに沿った値に置き換え
 ├── test_config.R.sample            # test_config.Rのひな形(要コピー、詳細は上記「Rでのテスト」参照)
 └── tools/
-    ├── convert_meddra_to_js.R      # MedDRA辞書をweb_tool用JSファイルに変換するCLI
-    ├── convert_who_drug_to_js.R    # WHO Drug/IDF辞書をweb_tool用JSファイルに変換するCLI
     ├── validate_common.R           # バリデーション共通関数・run_full_validation
     ├── validate_dm.R / validate_ae.R / validate_ds.R / validate_other_domains.R
     │                               # ドメインごとの検証関数

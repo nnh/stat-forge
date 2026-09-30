@@ -11,7 +11,7 @@ meddra_dir <- file.path(external_dict_dir, "MedDRA")
 
 who_drug_idf_parent_dir <- file.path(external_dict_dir, "WHO-DD_IDF")
 
-# Web版が使うWHO Drug/IDFの変換済み.js置き場(convert_who_drug_to_js.Rの出力先)。
+# Web版が使うWHO Drug/IDFの変換済み.js置き場。
 # who_drug_idf_parent_dir配下に生データ(WHODD/IDF)が無い場合のフォールバックとして使う
 who_drug_js_dir <- file.path(external_dict_dir, "who_drug")
 

@@ -1,5 +1,5 @@
 // MedDRA/WHO Drug辞書のバージョンを選択式で読み込む仕組み。
-// 辞書データ自体はr_version/tools/convert_meddra_to_js.R・convert_who_drug_to_js.Rで事前に
+// 辞書データ自体は「辞書バージョンの登録・管理」のD&D、またはSE-Assistant-Workbench(WHO-DD_IDF_Update)で事前に
 // data/meddra/<version>.js・data/who_drug/<version>.jsとして変換済みのものを、
 // 選択されたバージョンの1ファイルだけその場で<script>タグを動的に追加して読み込む
 // (file://でもfetch()を使わずに済むようにするため)。

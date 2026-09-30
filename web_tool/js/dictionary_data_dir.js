@@ -175,9 +175,8 @@ async function addVersionToVersionsJs(kind, label, file) {
 
   const content =
     "// MedDRA/WHO Drugの利用可能なバージョン一覧(プルダウンの選択肢に使う)。\n" +
-    "// 「辞書バージョンの登録・管理」からD&Dでバージョンを登録すると、この一覧にも自動で追記される。\n" +
-    "// r_version/tools/convert_meddra_to_js.R・convert_who_drug_to_js.Rで変換を追加した場合は、\n" +
-    "// ここに手動で追記すること。\n" +
+    "// 「辞書バージョンの登録・管理」からD&Dでバージョンを登録するか、\n" +
+    "// SE-Assistant-Workbench(WHO-DD_IDF_Update)の辞書更新処理を実行すると、この一覧にも自動で追記される。\n" +
     "window.__dictionaryVersions = " + JSON.stringify(data, null, 2) + ";\n";
 
   const fileHandle = await currentDataDirHandle.getFileHandle("versions.js", { create: true });

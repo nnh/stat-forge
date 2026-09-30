@@ -84,7 +84,7 @@ build_meddra_hierarchy_from_asc <- function(target_subfolder) {
   soc_pt_llt_hlgt_hlt
 }
 
-# Web版が使うMedDRAの.js(convert_meddra_to_js.Rで.ascから変換済み、コード・英語名のみ)から
+# Web版が使うMedDRAの.js(.ascから変換済み、コード・英語名のみ)から
 # 階層テーブルを構築する。.ascファイル一式が手元に無い環境向けのフォールバック
 build_meddra_hierarchy_from_js <- function(version) {
   safe_filename <- str_replace_all(version, "[^A-Za-z0-9._-]", "_")
