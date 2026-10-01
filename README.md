@@ -7,43 +7,34 @@ EDC仕様JSON(.json)から、統計解析プログラムの開発・検証用に
 - `FORGE ver1.1.html` — ダミーデータ生成ツールの起動ファイル(これをブラウザで開く)
 - `web_tool/` — 上記ツールの実装本体(js/data)
 - `r_version/` — 生成ロジックのR版実装 + 生成データの検証(バリデーション)スクリプト
+- `scripts/` — Web版の生成を自動化するスクリプト・回帰テスト(Playwright)
 
-## 使い方
+各フォルダの詳細は「開発者向け」の「ディレクトリ構成」を参照。
+
+## 利用者向け
+
+### 使い方
 
 - リポジトリ直下の `FORGE ver1.1.html` をブラウザで開く
 - EDC仕様JSON(.json)をドラッグ&ドロップ、または選択して読み込む
-- 「生成する」→ドメインごと、またはZIPで一括ダウンロード
+- 「生成する」をクリックすると、生成ドメイン一覧と、各ドメインのプレビュー(先頭1件)が表示される
+- 「ZIPで一括ダウンロード」をクリックして、全ドメインのCSVをまとめてダウンロードする
 
-### MedDRA / WHO Drug辞書の登録(必要時、半年に一度程度)
+### MedDRA / WHO Drug辞書について
 
-- 辞書のバージョン更新時など、必要になったときだけ行う作業(頻度は半年に1回程度)
-- `web_tool/data/meddra/`・`web_tool/data/who_drug/` にバージョンごとの変換済みJSファイルを置く
-- ライセンス上リポジトリに再配布できないため、フォルダ自体はgit管理下だが中身は`.gitignore`対象
-- 登録方法: 「辞書バージョンの登録・管理」からフォルダをD&D。または、SE-Assistant-Workbench(WHO-DD_IDF_Update)の辞書更新処理を実行すると、`kForgeDataDir`で指定したフォルダに自動で出力される
+- 辞書データ(`web_tool/data/meddra/`・`web_tool/data/who_drug/`配下のJSファイル)は、SE-Assistant-Workbench(WHO-DD_IDF_Update)の辞書更新処理で自動的に出力されるため、通常はこのツール側での登録作業は不要
+- 手動で登録したい場合は、「辞書バージョンの登録・管理」からバージョンフォルダをD&Dする
+  - フォルダのドラッグ&ドロップはChromium系ブラウザ(Chrome, Edge)のみ対応(Directory Entries APIの制約でSafari/Firefoxは非対応/一部対応)
 
 ### 制限事項
 
-- フォルダのドラッグ&ドロップはChromium系ブラウザ(Chrome, Edge)のみ対応(Directory Entries APIの制約でSafari/Firefoxは非対応/一部対応)
 - 複雑な割り付け(多段階の割り付け、層別化を伴う割り付け等)には対応していない
 - 条件(presence_conditions等)があまりにも厳しい場合、選択肢の一部が生成されないことがある
 - 症例数(被験者数)が少ないと、乱数によるサンプリングの都合上、選択肢の一部が生成されないことがある
 
-## Rでのテスト
+## 開発者向け
 
-現在、生成データの検証は以下の3ファイルのみを実行する運用になっている:
-
-- `r_version/tools/validate_datasets_test1_web.R`
-- `r_version/tools/validate_datasets_test2_web.R`
-- `r_version/tools/validate_datasets_test3_web.R`
-
-### セットアップ
-
-1. `r_version/test_config.R.sample` を `r_version/test_config.R` としてコピー(gitignore対象、各自のローカルパスを書く)
-2. `json_path`(EDC仕様JSON)・`other_domains_web_csv_dir`(Webツールの「ZIPで一括ダウンロード」展開先)を自分の環境のパスに書き換える
-3. 上記3ファイルそれぞれの冒頭にある `json_path` / `fixed_value_checks_csv_path` も、テストごとに固定値なので必要に応じて書き換える
-4. 対象ファイルを先頭から実行する
-
-## ディレクトリ構成
+### ディレクトリ構成
 
 ```
 FORGE ver1.1.html                          # 画面本体(起動ファイル)
@@ -71,8 +62,8 @@ web_tool/
     └── who_drug/                   # 変換済みWHO Drug/IDFデータ(gitignore対象、フォルダのみ管理)
 
 r_version/
-├── r_version.Rproj                 # Rプロジェクト
 ├── constant.R                      # 定数(外部辞書のパス等)
+├── resolve_os_path.R               # 実行環境(Mac/Windows)に応じたパスの切り替え
 ├── user_input.R                    # 登録予定被験者数・登録開始日
 ├── load_edc_spec.R                 # EDC仕様JSONの読み込み〜各ドメイン生成までを一括実行
 ├── generate_random_date.R          # 日付項目の乱数生成
@@ -80,14 +71,14 @@ r_version/
 ├── build_domain_common.R           # ドメイン生成の共通処理
 ├── build_dm_domain.R / build_ae_domain.R / build_ds_domain.R  # DM/AE/DSドメイン生成
 ├── build_cdisc_variable_values.R   # cdisc_variable_values組み立て
-├── build_validator_table.R         # field_itemsのvalidatorsを縦持りtibble化
+├── build_validator_table.R         # field_itemsのvalidatorsを縦持ちtibble化
 ├── build_generation_constraints.R  # 生成制約テーブル一式の組み立て
 ├── build_field_reference_table.R   # Reference型フィールドの参照関係テーブル
 ├── build_meddra_soc_pt_llt.R       # MedDRA階層(SOC〜LLT)の結合
 ├── read_who_drug_idf.R             # WHO Drug/IDFテーブルの読み込み・結合
 ├── lb_reference_ranges.R / tr_orres_values.R / vs_orres_values.R / fa_orres_values.R
 │                                   # LB/TR/VS/FAのORRESを数値バリデーションに沿った値に置き換え
-├── test_config.R.sample            # test_config.Rのひな形(要コピー、詳細は上記「Rでのテスト」参照)
+├── test_config.R.sample            # test_config.Rのひな形(要コピー、詳細は後述「Rでのテスト」参照)
 └── tools/
     ├── validate_common.R           # バリデーション共通関数・run_full_validation
     ├── validate_dm.R / validate_ae.R / validate_ds.R / validate_other_domains.R
@@ -95,21 +86,52 @@ r_version/
     ├── validate_test1_shared.R / validate_test2_shared.R
     │                               # test1/test2で共通の検証処理
     ├── validate_datasets_test3_fa.R  # test3のFA特別チェック(test3_webからsource)
-    └── validate_datasets_test1_web.R / test2_web.R / test3_web.R
-                                    # Webツール生成CSVを検証するテスト本体(現在運用中の3ファイル)
+    └── validate_datasets_test1_web.R / test2_web.R / test3_web.R / test4_web.R / test5_web.R
+                                    # Webツール生成CSVを検証するテスト本体
+
+scripts/
+├── generate_dummy_data.js          # Web版生成の自動化(Playwright)
+├── test_integer_input_sanitization.js  # 入力欄の整数サニタイズ回帰テスト
+└── lib/
+    └── log_file.js                 # コンソール出力をlogs/にも書き出す共通ロガー
+
+logs/                               # scripts/の実行ログ出力先(フォルダのみ管理、ログファイルはgitignore対象)
+
+package.json                        # scripts/の依存パッケージ(Playwright等)・npmスクリプト
 ```
 
-## Web版生成の自動化(Playwright)
+辞書データ(`web_tool/data/meddra/`・`web_tool/data/who_drug/`の中身)は、ライセンス上リポジトリに再配布できないため、フォルダ自体はgit管理下だが中身は`.gitignore`対象。
+
+### テスト
+
+#### Rでのテスト
+
+生成データの検証は以下のファイルを実行する:
+
+- `r_version/tools/validate_datasets_test1_web.R`
+- `r_version/tools/validate_datasets_test2_web.R`
+- `r_version/tools/validate_datasets_test3_web.R`
+- `r_version/tools/validate_datasets_test4_web.R`
+- `r_version/tools/validate_datasets_test5_web.R`
+
+##### セットアップ
+
+1. `r_version/test_config.R.sample` を `r_version/test_config.R` としてコピー(gitignore対象、各自のローカルパスを書く)
+2. `json_path`(EDC仕様JSON)・`other_domains_web_csv_dir`(Webツールの「ZIPで一括ダウンロード」展開先)を自分の環境のパスに書き換える
+3. 上記ファイルそれぞれの冒頭にある `json_path` / `fixed_value_checks_csv_path` も、テストごとに固定値なので必要に応じて書き換える
+4. 対象ファイルを先頭から実行する
+
+#### Web版生成の自動化(Playwright)
 
 `scripts/generate_dummy_data.js` で、Web版の「JSON読み込み→生成→ZIPで一括ダウンロード→展開」を自動化できる。
 辞書(MedDRA/WHO Drug)は `web_tool/data/versions.js` に登録済みのバージョン(プルダウンのデフォルト=先頭/最新)を使う。
 辞書バージョンの新規登録(D&D、ネイティブのフォルダ選択ダイアログを使う操作)は自動化の対象外なので、事前に手動で登録しておくこと。
 
-### 必要な環境
+##### 必要な環境
 
 - Node.js(npmが使えること)
 
-### セットアップ・実行
+##### セットアップ・実行
 
 ```bash
 npm install
@@ -124,7 +146,7 @@ node scripts/generate_dummy_data.js <jsonPath> <outputDir>
 `logs/generate_dummy_data_<日時>.log` にも書き出される
 (`logs/`フォルダ自体はリポジトリ管理下、ログファイル自体は`.gitignore`対象)。
 
-### 入力欄の整数サニタイズ回帰テスト
+#### 入力欄の整数サニタイズ回帰テスト
 
 被験者数・施設数・AEレコード数の入力欄(`.integer-input`)が、全角数字・小数点・文字等の
 ASCII数字以外を実際に受け付けないことを確認する回帰テスト。EDC仕様JSONは不要。
@@ -135,9 +157,6 @@ npm run test:integer-input
 
 `scripts/generate_dummy_data.js`(実際のダミーデータ生成)とは別スクリプトにしている。
 生成フローにこのテスト用の入力を混ぜて、誤って生成データに使われてしまう事故を避けるため
-
-実行結果は `logs/test_integer_input_sanitization_<日時>.log` にも書き出される
-(`logs/`フォルダ自体はリポジトリ管理下、ログファイル自体は`.gitignore`対象)
 
 実行結果は `logs/test_integer_input_sanitization_<日時>.log` にも書き出される
 (`logs/`フォルダ自体はリポジトリ管理下、ログファイル自体は`.gitignore`対象)
