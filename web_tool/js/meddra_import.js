@@ -93,7 +93,7 @@ function buildMeddraHierarchyFromAscData(ascData) {
   return { columns: MEDDRA_COLUMNS, rows };
 }
 
-// MedDRAバージョンフォルダのディレクトリハンドルから、data/meddra/<version>.jsと同じ内容の
+// MedDRAバージョンフォルダのディレクトリハンドルから、dictionary_data/meddra/<version>.jsと同じ内容の
 // JSテキストを作る(versionはフォルダ名をそのまま使う)
 async function buildMeddraVersionJsContent(dirHandle) {
   const version = dirHandle.name;

@@ -5,7 +5,8 @@ EDC仕様JSON(.json)から、統計解析プログラムの開発・検証用に
 ## 構成
 
 - `FORGE ver1.1.html` — ダミーデータ生成ツールの起動ファイル(これをブラウザで開く)
-- `web_tool/` — 上記ツールの実装本体(js/data)
+- `web_tool/` — 上記ツールの実装本体(js)
+- `dictionary_data/` — MedDRA/WHO Drugの辞書データ(変換済みJSファイル)の置き場
 - `r_version/` — 生成ロジックのR版実装 + 生成データの検証(バリデーション)スクリプト
 - `scripts/` — Web版の生成を自動化するスクリプト・回帰テスト(Playwright)
 
@@ -22,7 +23,7 @@ EDC仕様JSON(.json)から、統計解析プログラムの開発・検証用に
 
 ### MedDRA / WHO Drug辞書について
 
-- 辞書データ(`web_tool/data/meddra/`・`web_tool/data/who_drug/`配下のJSファイル)は、SE-Assistant-Workbench(WHO-DD_IDF_Update)の辞書更新処理で自動的に出力されるため、通常はこのツール側での登録作業は不要
+- 辞書データ(`dictionary_data/meddra/`・`dictionary_data/who_drug/`配下のJSファイル)は、SE-Assistant-Workbench(WHO-DD_IDF_Update)の辞書更新処理で自動的に出力されるため、通常はこのツール側での登録作業は不要
 - 手動で登録したい場合は、「辞書バージョンの登録・管理」からバージョンフォルダをD&Dする
   - フォルダのドラッグ&ドロップはChromium系ブラウザ(Chrome, Edge)のみ対応(Directory Entries APIの制約でSafari/Firefoxは非対応/一部対応)
 
@@ -50,16 +51,17 @@ web_tool/
 │   ├── other_domains.js            # DM/AE/DS以外の各ドメイン生成(CM/MH/EG等)
 │   ├── orres_realism.js            # LB/TR/VSのORRESを数値バリデーションに沿った値に置き換え
 │   ├── dictionaries.js             # MedDRA/WHO Drug辞書バージョンの選択式読み込み
-│   ├── dictionary_data_dir.js      # data/フォルダへのFile System Access API管理・D&D登録
+│   ├── dictionary_data_dir.js      # dictionary_data/フォルダへのFile System Access API管理・D&D登録
 │   ├── meddra_import.js            # MedDRAバージョンフォルダ(.asc)のパース
 │   ├── who_drug_import.js          # WHO Drug/IDFバージョンフォルダのパース
 │   └── util.js                     # 共通ユーティリティ(CSV変換・ダウンロード・乱数シード)
-├── tools/
-│   └── validate_seed_reproducibility.js  # 乱数シード機能の再現性検証
-└── data/
-    ├── versions.js                 # 辞書バージョン一覧のマニフェスト
-    ├── meddra/                     # 変換済みMedDRAデータ(gitignore対象、フォルダのみ管理)
-    └── who_drug/                   # 変換済みWHO Drug/IDFデータ(gitignore対象、フォルダのみ管理)
+└── tools/
+    └── validate_seed_reproducibility.js  # 乱数シード機能の再現性検証
+
+dictionary_data/
+├── versions.js                     # 辞書バージョン一覧のマニフェスト
+├── meddra/                         # 変換済みMedDRAデータ(gitignore対象、フォルダのみ管理)
+└── who_drug/                       # 変換済みWHO Drug/IDFデータ(gitignore対象、フォルダのみ管理)
 
 r_version/
 ├── constant.R                      # 定数(外部辞書のパス等)
@@ -100,7 +102,7 @@ logs/                               # scripts/の実行ログ出力先(フォル
 package.json                        # scripts/の依存パッケージ(Playwright等)・npmスクリプト
 ```
 
-辞書データ(`web_tool/data/meddra/`・`web_tool/data/who_drug/`の中身)は、ライセンス上リポジトリに再配布できないため、フォルダ自体はgit管理下だが中身は`.gitignore`対象。
+辞書データ(`dictionary_data/meddra/`・`dictionary_data/who_drug/`の中身)は、ライセンス上リポジトリに再配布できないため、フォルダ自体はgit管理下だが中身は`.gitignore`対象。
 
 ### テスト
 
@@ -124,7 +126,7 @@ package.json                        # scripts/の依存パッケージ(Playwrigh
 #### Web版生成の自動化(Playwright)
 
 `scripts/generate_dummy_data.js` で、Web版の「JSON読み込み→生成→ZIPで一括ダウンロード→展開」を自動化できる。
-辞書(MedDRA/WHO Drug)は `web_tool/data/versions.js` に登録済みのバージョン(プルダウンのデフォルト=先頭/最新)を使う。
+辞書(MedDRA/WHO Drug)は `dictionary_data/versions.js` に登録済みのバージョン(プルダウンのデフォルト=先頭/最新)を使う。
 辞書バージョンの新規登録(D&D、ネイティブのフォルダ選択ダイアログを使う操作)は自動化の対象外なので、事前に手動で登録しておくこと。
 
 ##### 必要な環境

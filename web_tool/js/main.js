@@ -86,8 +86,8 @@ function populateVersionSelectFromLabels(selectId, labels) {
   }
 }
 
-// データフォルダへのアクセスが許可されていればdata/meddra・data/who_drug配下の実ファイルから、
-// 未許可ならdata/versions.jsの一覧から、プルダウンを埋め直す
+// データフォルダへのアクセスが許可されていればdictionary_data/meddra・dictionary_data/who_drug配下の実ファイルから、
+// 未許可ならdictionary_data/versions.jsの一覧から、プルダウンを埋め直す
 async function refreshVersionSelects() {
   if (hasDataDirAccess()) {
     const meddraLabels = await listVersionsFromDataDir("meddra");
@@ -107,12 +107,12 @@ let dataDirState = "not-set";
 function updateDataDirUi() {
   if (dataDirState === "granted") {
     grantDataDirBtn.textContent = "データフォルダへのアクセス: 許可済み(別のフォルダを選び直す)";
-    dataDirStatus.textContent = "web_tool/dataフォルダへのアクセスが有効です。バージョン一覧はこのフォルダから取得しています。";
+    dataDirStatus.textContent = "dictionary_dataフォルダへのアクセスが有効です。バージョン一覧はこのフォルダから取得しています。";
   } else if (dataDirState === "needs-reauth") {
     grantDataDirBtn.textContent = "データフォルダへのアクセスを再許可";
     dataDirStatus.textContent = "以前許可したフォルダへのアクセスが失効しています(ブラウザ再起動後など)。ボタンを押して再許可してください。";
   } else {
-    grantDataDirBtn.textContent = "データフォルダ(web_tool/data)へのアクセスを許可";
+    grantDataDirBtn.textContent = "データフォルダ(dictionary_data)へのアクセスを許可";
     dataDirStatus.textContent = "未許可です(未許可でも従来通り動作します。許可すると、バージョン一覧をdataフォルダから自動取得できます)。";
   }
 }
@@ -190,7 +190,7 @@ dictionaryDropZone.addEventListener("drop", async (e) => {
     }
 
     const filename = await writeDictionaryVersionFile(kind, version, content);
-    dictionaryImportStatus.textContent = `${dictionaryLabel}「${version}」を登録しました(${rowCount}行, data/${kind}/${filename})。`;
+    dictionaryImportStatus.textContent = `${dictionaryLabel}「${version}」を登録しました(${rowCount}行, dictionary_data/${kind}/${filename})。`;
     await refreshVersionSelects();
   } catch (e) {
     dictionaryImportStatus.textContent = `${dictionaryLabel}の取り込みに失敗しました: ` + e.message;

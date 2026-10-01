@@ -1,10 +1,10 @@
-// MedDRA/WHO Drugのデータフォルダ(web_tool/data)へのFile System Access APIアクセスを管理する。
+// MedDRA/WHO Drugのデータフォルダ(dictionary_data)へのFile System Access APIアクセスを管理する。
 // 一度許可を得ると、IndexedDBにディレクトリハンドルを保存し、次回以降はqueryPermission()で
 // 権限が残っているか確認するだけで済む(ブラウザ再起動後は失効するため、その場合は
 // 再許可ボタンでrequestPermission()を呼ぶ。フォルダ選択ダイアログは再度出ない)。
-// 許可を得たフォルダは、バージョン一覧の動的取得(data/meddra・data/who_drug配下のファイル名から
+// 許可を得たフォルダは、バージョン一覧の動的取得(dictionary_data/meddra・dictionary_data/who_drug配下のファイル名から
 // プルダウンを作る)と、新しいバージョンファイルの書き込み(Stage 2以降)に使う。
-// 未許可の場合は、従来通りdata/versions.jsの一覧を使う(dictionaries.js側にフォールバックあり)。
+// 未許可の場合は、従来通りdictionary_data/versions.jsの一覧を使う(dictionaries.js側にフォールバックあり)。
 
 const DICTIONARY_DATA_DIR_DB_NAME = "dictionaryDataDirDb";
 const DICTIONARY_DATA_DIR_STORE = "handles";
@@ -44,7 +44,7 @@ async function saveDataDirHandle(handle) {
   });
 }
 
-// 選んだフォルダがdata直下(meddra・who_drugサブフォルダを持つ)かどうかの簡易チェック
+// 選んだフォルダがdictionary_data直下(meddra・who_drugサブフォルダを持つ)かどうかの簡易チェック
 async function looksLikeDataDir(handle) {
   try {
     await handle.getDirectoryHandle("meddra");
@@ -59,7 +59,7 @@ async function looksLikeDataDir(handle) {
 async function requestDataDirAccess() {
   const handle = await window.showDirectoryPicker({ mode: "readwrite" });
   if (!(await looksLikeDataDir(handle))) {
-    throw new Error("選択したフォルダはweb_tool/dataではないようです(meddra・who_drugフォルダが見つかりません)。");
+    throw new Error("選択したフォルダはdictionary_dataではないようです(meddra・who_drugフォルダが見つかりません)。");
   }
   await saveDataDirHandle(handle);
   currentDataDirHandle = handle;
@@ -128,7 +128,7 @@ async function dictionaryVersionFileExists(kind, version) {
   }
 }
 
-// kind配下のversion.jsを、versions.jsに載っていないバージョン(D&Dでdataフォルダに直接登録した
+// kind配下のversion.jsを、versions.jsに載っていないバージョン(D&Dでdictionary_dataフォルダに直接登録した
 // もの)用に、ディレクトリハンドル経由で直接読み込んで実行する(<script src>と同じ内容を
 // window.__meddraVersions/__whoDrugVersionsに設定する)
 async function loadDictionaryVersionFromDataDir(kind, label) {

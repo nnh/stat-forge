@@ -5,7 +5,7 @@ source(here("resolve_os_path.R"))
 
 external_dict_dir <- resolve_os_path(
   "/Users/mariko/Library/CloudStorage/Box-Box/Stat/Tools/WHO-DD_IDF_MedDRA",
-  "C:\\Users\\c0002691\\Box\\Stat\\Tools\\FORGE\\web_tool\\data"
+  "C:\\Users\\c0002691\\Box\\Stat\\Tools\\FORGE\\dictionary_data"
 )
 meddra_dir <- file.path(external_dict_dir, "MedDRA")
 
