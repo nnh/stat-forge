@@ -1,7 +1,7 @@
 // 画面操作の配線: JSONアップロード -> 設定入力 -> 生成 -> プレビュー/ダウンロード
 
-const APP_VERSION = "1.1";
-const APP_BUILD_DATE = "2026-09-29";
+const APP_VERSION = "1.2";
+const APP_BUILD_DATE = "2026-10-08";
 document.getElementById("app-version").textContent = `v${APP_VERSION} (${APP_BUILD_DATE})`;
 
 let edcSpec = null;
@@ -41,11 +41,40 @@ document.querySelectorAll(".integer-input").forEach((el) => {
   el.addEventListener("compositionend", () => sanitizeIntegerInputValue(el));
 });
 
+const VERSION_MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+
+// バージョン名を比較用の数値配列に変換する(例: "29.1" -> [29, 1]、"2025 Sep 1" -> [2025, 9, 1])。
+// 数値・月名(英語3文字)以外を含む場合はnullを返す
+function parseVersionLabel(label) {
+  const parts = label.trim().split(/[\s._-]+/).map((token) => {
+    const monthIndex = VERSION_MONTHS.indexOf(token.slice(0, 3).toLowerCase());
+    if (monthIndex >= 0) return monthIndex + 1;
+    return /^\d+$/.test(token) ? Number(token) : NaN;
+  });
+  return parts.some(Number.isNaN) ? null : parts;
+}
+
+// バージョン名を新しい順に並べるための比較関数。
+// 解釈できないバージョン名同士は文字列(数字部分は数値)として比較する
+function compareVersionLabelsDesc(a, b) {
+  const pa = parseVersionLabel(a);
+  const pb = parseVersionLabel(b);
+  if (pa && pb) {
+    for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+      const diff = (pb[i] ?? 0) - (pa[i] ?? 0);
+      if (diff !== 0) return diff;
+    }
+    return 0;
+  }
+  return b.localeCompare(a, undefined, { numeric: true });
+}
+
 // MedDRA/WHO Drugのバージョン選択プルダウンをlabelsの一覧で埋める。
-// 末尾(最新)をデフォルト選択にする
+// 新しい順に並べ、先頭(最新)をデフォルト選択にする
 function populateVersionSelectFromLabels(selectId, labels) {
   const select = document.getElementById(selectId);
   select.innerHTML = "";
+  labels = [...labels].sort(compareVersionLabelsDesc);
   labels.forEach((label) => {
     const option = document.createElement("option");
     option.value = label;
@@ -53,12 +82,12 @@ function populateVersionSelectFromLabels(selectId, labels) {
     select.appendChild(option);
   });
   if (labels.length > 0) {
-    select.value = labels[labels.length - 1];
+    select.value = labels[0];
   }
 }
 
-// データフォルダへのアクセスが許可されていればdata/meddra・data/who_drug配下の実ファイルから、
-// 未許可ならdata/versions.jsの一覧から、プルダウンを埋め直す
+// データフォルダへのアクセスが許可されていればdictionary_data/meddra・dictionary_data/who_drug配下の実ファイルから、
+// 未許可ならdictionary_data/versions.jsの一覧から、プルダウンを埋め直す
 async function refreshVersionSelects() {
   if (hasDataDirAccess()) {
     const meddraLabels = await listVersionsFromDataDir("meddra");
@@ -78,12 +107,12 @@ let dataDirState = "not-set";
 function updateDataDirUi() {
   if (dataDirState === "granted") {
     grantDataDirBtn.textContent = "データフォルダへのアクセス: 許可済み(別のフォルダを選び直す)";
-    dataDirStatus.textContent = "web_tool/dataフォルダへのアクセスが有効です。バージョン一覧はこのフォルダから取得しています。";
+    dataDirStatus.textContent = "dictionary_dataフォルダへのアクセスが有効です。バージョン一覧はこのフォルダから取得しています。";
   } else if (dataDirState === "needs-reauth") {
     grantDataDirBtn.textContent = "データフォルダへのアクセスを再許可";
     dataDirStatus.textContent = "以前許可したフォルダへのアクセスが失効しています(ブラウザ再起動後など)。ボタンを押して再許可してください。";
   } else {
-    grantDataDirBtn.textContent = "データフォルダ(web_tool/data)へのアクセスを許可";
+    grantDataDirBtn.textContent = "データフォルダ(dictionary_data)へのアクセスを許可";
     dataDirStatus.textContent = "未許可です(未許可でも従来通り動作します。許可すると、バージョン一覧をdataフォルダから自動取得できます)。";
   }
 }
@@ -161,7 +190,7 @@ dictionaryDropZone.addEventListener("drop", async (e) => {
     }
 
     const filename = await writeDictionaryVersionFile(kind, version, content);
-    dictionaryImportStatus.textContent = `${dictionaryLabel}「${version}」を登録しました(${rowCount}行, data/${kind}/${filename})。`;
+    dictionaryImportStatus.textContent = `${dictionaryLabel}「${version}」を登録しました(${rowCount}行, dictionary_data/${kind}/${filename})。`;
     await refreshVersionSelects();
   } catch (e) {
     dictionaryImportStatus.textContent = `${dictionaryLabel}の取り込みに失敗しました: ` + e.message;

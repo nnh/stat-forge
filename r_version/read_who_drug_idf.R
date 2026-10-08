@@ -70,7 +70,7 @@ build_who_drug_idf <- function(who_drug_idf_parent_dir, who_drug_idf_version_fol
   idf_id_mapping_combined
 }
 
-# Web版が使うWHO Drug/IDFの.js(convert_who_drug_to_js.Rで生データから変換済み、
+# Web版が使うWHO Drug/IDFの.js(生データから変換済み、
 # drug_code/full_name_en/generic_name_enのみ)から読み込む。生データ(WHODD/IDFフォルダ)が
 # 手元に無い環境向けのフォールバック
 build_who_drug_idf_from_js <- function(version) {

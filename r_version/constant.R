@@ -4,14 +4,14 @@ library(here)
 source(here("resolve_os_path.R"))
 
 external_dict_dir <- resolve_os_path(
-  "/Users/mariko/Library/CloudStorage/Box-Box/Stat/Tools/test20260817",
-  "C:\\Users\\c0002691\\Box\\Stat\\Tools\\FORGE ver1.1\\web_tool\\data"
+  "/Users/mariko/Library/CloudStorage/Box-Box/Stat/Tools/WHO-DD_IDF_MedDRA",
+  "C:\\Users\\c0002691\\Box\\Stat\\Tools\\FORGE\\dictionary_data"
 )
 meddra_dir <- file.path(external_dict_dir, "MedDRA")
 
 who_drug_idf_parent_dir <- file.path(external_dict_dir, "WHO-DD_IDF")
 
-# Web版が使うWHO Drug/IDFの変換済み.js置き場(convert_who_drug_to_js.Rの出力先)。
+# Web版が使うWHO Drug/IDFの変換済み.js置き場。
 # who_drug_idf_parent_dir配下に生データ(WHODD/IDF)が無い場合のフォールバックとして使う
 who_drug_js_dir <- file.path(external_dict_dir, "who_drug")
 

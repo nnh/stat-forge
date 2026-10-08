@@ -138,7 +138,7 @@ async function buildWhoDrugHierarchy(dirHandle) {
   return { columns: WHO_DRUG_COLUMNS, rows };
 }
 
-// WHO Drug/IDFバージョンフォルダのディレクトリハンドルから、data/who_drug/<version>.jsと同じ内容の
+// WHO Drug/IDFバージョンフォルダのディレクトリハンドルから、dictionary_data/who_drug/<version>.jsと同じ内容の
 // JSテキストを作る(versionはフォルダ名をそのまま使う)
 async function buildWhoDrugVersionJsContent(dirHandle) {
   const version = dirHandle.name;

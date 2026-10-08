@@ -1,9 +1,9 @@
 // MedDRA/WHO Drug辞書のバージョンを選択式で読み込む仕組み。
-// 辞書データ自体はr_version/tools/convert_meddra_to_js.R・convert_who_drug_to_js.Rで事前に
-// data/meddra/<version>.js・data/who_drug/<version>.jsとして変換済みのものを、
+// 辞書データ自体は「辞書バージョンの登録・管理」のD&D、またはSE-Assistant-Workbench(WHO-DD_IDF_Update)で事前に
+// dictionary_data/meddra/<version>.js・dictionary_data/who_drug/<version>.jsとして変換済みのものを、
 // 選択されたバージョンの1ファイルだけその場で<script>タグを動的に追加して読み込む
 // (file://でもfetch()を使わずに済むようにするため)。
-// どのバージョンが選べるかはdata/versions.jsのwindow.__dictionaryVersionsを見る
+// どのバージョンが選べるかはdictionary_data/versions.jsのwindow.__dictionaryVersionsを見る
 
 // kind("meddra"または"who_drug")のバージョンlabel一覧を返す(プルダウンの選択肢用)
 function listDictionaryVersions(kind) {
@@ -20,7 +20,7 @@ function findDictionaryFile(kind, label) {
 
 // kindのlabelバージョンのデータファイルを<script>タグで動的に読み込む。
 // 既に読み込み済み(window.__meddraVersions[label]等が存在)なら何もしない。
-// versions.jsに載っていない(=D&Dでdataフォルダに直接登録した)バージョンの場合は、
+// versions.jsに載っていない(=D&Dでdictionary_dataフォルダに直接登録した)バージョンの場合は、
 // データフォルダへのアクセスが許可されていれば、ディレクトリハンドル経由で直接読み込む。
 // 戻り値はPromise(読み込み完了時にresolve、失敗時にreject)
 async function loadDictionaryVersion(kind, label) {
@@ -32,7 +32,7 @@ async function loadDictionaryVersion(kind, label) {
   if (file) {
     return new Promise((resolve, reject) => {
       const script = document.createElement("script");
-      script.src = `web_tool/data/${kind}/${file}.js`;
+      script.src = `dictionary_data/${kind}/${file}.js`;
       script.onload = () => resolve();
       script.onerror = () => reject(new Error(`${kind}データの読み込みに失敗しました: ${script.src}`));
       document.head.appendChild(script);

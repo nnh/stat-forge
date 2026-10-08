@@ -5,16 +5,16 @@ source(here("resolve_os_path.R"))
 # check_value_equals(固定値チェック)用のCSV設定ファイルのパス。内容(チェックしたい固定値)は
 # 試験ごとに異なるため、test_config.R(共通)ではなくここで指定する。リポジトリ外の任意の場所でよい
 fixed_value_checks_csv_path <- resolve_os_path(
-  "/Users/mariko/Library/CloudStorage/Box-Box/Datacenter/Users/ohtsuka/2026/20260826/test4/fixed_value_checks_test4.csv",
-  "C:\\Users\\c0002691\\Box\\Datacenter\\Users\\ohtsuka\\2026\\20260826\\test4\\fixed_value_checks_test4.csv"
+  "/Users/mariko/Library/CloudStorage/Box-Box/Datacenter/Users/ohtsuka/2026/stat-forge-test/test4/fixed_value_checks_test4.csv",
+  "C:\\Users\\c0002691\\Box\\Datacenter\\Users\\ohtsuka\\2026\\stat-forge-test\\test4\\fixed_value_checks_test4.csv"
 )
 
 source(here("test_config.R"))
 # test_config.Rはjson_path(他テストとの切り替え用)も定義するが、このファイルは上で固定した
 # json_pathを優先して使うため、test_config.R側の値で上書きしないよう再度設定し直す
 json_path <- resolve_os_path(
-  "/Users/mariko/Library/CloudStorage/Box-Box/Datacenter/Users/ohtsuka/2026/20260826/test4/json/fortest4_260826_1501.json",
-  "C:\\Users\\c0002691\\Box\\Datacenter\\Users\\ohtsuka\\2026\\20260826\\test4\\json\\fortest4_260826_1501.json"
+  "/Users/mariko/Library/CloudStorage/Box-Box/Datacenter/Users/ohtsuka/2026/stat-forge-test/test4/json/fortest4_260826_1501.json",
+  "C:\\Users\\c0002691\\Box\\Datacenter\\Users\\ohtsuka\\2026\\stat-forge-test\\test4\\json\\fortest4_260826_1501.json"
 )
 source(here("tools/validate_common.R"))
 

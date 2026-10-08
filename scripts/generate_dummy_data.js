@@ -1,6 +1,6 @@
 // FORGE(Web版)の「JSON読み込み→生成→ZIPで一括ダウンロード」を自動化するスクリプト。
-// 辞書(MedDRA/WHO Drug)は data/versions.js に登録済みのバージョンをプルダウンの
-// デフォルト値(末尾=最新)のまま使う。辞書バージョンの新規登録(showDirectoryPicker()を使う
+// 辞書(MedDRA/WHO Drug)は dictionary_data/versions.js に登録済みのバージョンをプルダウンの
+// デフォルト値(先頭=最新)のまま使う。辞書バージョンの新規登録(showDirectoryPicker()を使う
 // D&D操作)はネイティブのフォルダ選択ダイアログが絡むため自動化の対象外(手動での事前登録が前提)。
 //
 // 使い方: node scripts/generate_dummy_data.js <jsonPath> <outputDir>
@@ -34,7 +34,7 @@ if (!fs.existsSync(jsonPath)) {
   process.exit(1);
 }
 
-const htmlPath = path.join(repoRoot, "FORGE ver1.1.html");
+const htmlPath = path.join(repoRoot, "FORGE ver1.2.html");
 log(`起動ファイル: ${htmlPath}`);
 log(`EDC仕様JSON: ${path.resolve(jsonPath)}`);
 

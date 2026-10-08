@@ -16,7 +16,7 @@ import { createLogger } from "./lib/log_file.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..");
-const htmlPath = path.join(repoRoot, "FORGE ver1.1.html");
+const htmlPath = path.join(repoRoot, "FORGE ver1.2.html");
 
 const { log, logError, flush } = createLogger(repoRoot, "test_integer_input_sanitization");
 

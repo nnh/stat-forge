@@ -29,9 +29,9 @@ const jsFiles = [
   "js/ds_domain.js",
   "js/other_domains.js",
   "js/orres_realism.js",
-  "data/versions.js",
-  "data/meddra/29.0.js",
-  "data/who_drug/2025_Sep_1.js",
+  "../dictionary_data/versions.js",
+  "../dictionary_data/meddra/29.0.js",
+  "../dictionary_data/who_drug/2025_Sep_1.js",
 ];
 eval(jsFiles.map((f) => fs.readFileSync(path.join(webToolDir, f), "utf8")).join("\n;\n"));
 

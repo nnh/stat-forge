@@ -6,8 +6,8 @@ source(here("resolve_os_path.R"))
 # 試験ごとに異なるため、test_config.R(共通)ではなくここで指定する。リポジトリ外の任意の場所でよい
 # TODO: test5のfixed_value_checks_test5.csvの実際のパスに置き換える
 fixed_value_checks_csv_path <- resolve_os_path(
-  "/Users/mariko/Library/CloudStorage/Box-Box/Datacenter/Users/ohtsuka/2026/20260826/test5/fixed_value_checks_test5.csv",
-  "C:\\Users\\c0002691\\Box\\Datacenter\\Users\\ohtsuka\\2026\\20260826\\test5\\fixed_value_checks_test5.csv"
+  "/Users/mariko/Library/CloudStorage/Box-Box/Datacenter/Users/ohtsuka/2026/stat-forge-test/test5/fixed_value_checks_test5.csv",
+  "C:\\Users\\c0002691\\Box\\Datacenter\\Users\\ohtsuka\\2026\\stat-forge-test\\test5\\fixed_value_checks_test5.csv"
 )
 
 source(here("test_config.R"))
@@ -15,8 +15,8 @@ source(here("test_config.R"))
 # json_pathを優先して使うため、test_config.R側の値で上書きしないよう再度設定し直す
 # TODO: test5のJSONファイルの実際のパスに置き換える
 json_path <- resolve_os_path(
-  "/Users/mariko/Library/CloudStorage/Box-Box/Datacenter/Users/ohtsuka/2026/20260826/test5/json/fortest5_260728_1634.json",
-  "C:\\Users\\c0002691\\Box\\Datacenter\\Users\\ohtsuka\\2026\\20260826\\test5\\json\\fortest5_260728_1634.json"
+  "/Users/mariko/Library/CloudStorage/Box-Box/Datacenter/Users/ohtsuka/2026/stat-forge-test/test5/json/fortest5_260728_1634.json",
+  "C:\\Users\\c0002691\\Box\\Datacenter\\Users\\ohtsuka\\2026\\stat-forge-test\\test5\\json\\fortest5_260728_1634.json"
 )
 source(here("tools/validate_common.R"))
 
