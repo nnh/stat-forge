@@ -94,6 +94,7 @@ r_version/
 scripts/
 ├── generate_dummy_data.js          # Web版生成の自動化(Playwright)
 ├── test_integer_input_sanitization.js  # 入力欄の整数サニタイズ回帰テスト
+├── deploy_to_production.ps1        # 本番フォルダへのデプロイ
 └── lib/
     └── log_file.js                 # コンソール出力をlogs/にも書き出す共通ロガー
 
@@ -162,6 +163,24 @@ npm run test:integer-input
 
 実行結果は `logs/test_integer_input_sanitization_<日時>.log` にも書き出される
 (`logs/`フォルダ自体はリポジトリ管理下、ログファイル自体は`.gitignore`対象)
+
+#### 本番フォルダへのデプロイ
+
+`scripts/deploy_to_production.ps1` で、リポジトリ直下の `FORGE ver*.html`・`README.md`・`web_tool/` 配下を
+本番フォルダ(Box同期)にコピーする。`dictionary_data/`(本番の実データ)は対象外で一切触らない。
+既存ファイルは上書き・追加のみ行い、本番側にしかないファイルは削除しない
+(リポジトリ側に無いファイルがあれば一覧表示するが、削除はしない)。
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\deploy_to_production.ps1
+```
+
+内容を確認して `y` で進めるとコピーされる。確認をスキップする場合は `-NoConfirm` を付ける。
+本番フォルダのパスを変える場合は `-DestinationRoot "任意のパス"` を指定する。
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\deploy_to_production.ps1 -NoConfirm
+```
 
 ## ライセンス
 
