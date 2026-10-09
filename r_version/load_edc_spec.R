@@ -212,13 +212,6 @@ load_edc_spec <- function(json_path) {
   ds <- sort_by_seq(ds, "DS")
   other_domains <- other_domains %>% imap(sort_by_seq)
 
-  # 生成データ(ae/dm/ds/other_domains)をCSVとして出力する(ドメイン名の大文字+"_dummy.csv"、例: DM_dummy.csv)。
-  # RのNAは空欄として書き出す(コードリストの選択肢として文字列"NA"が使われているケースがあるため、
-  # 空欄と文字列としての"NA"を区別できるようにするため)
-  if (!dir.exists(output_csv_dir)) dir.create(output_csv_dir, recursive = TRUE)
-  export_datasets <- c(list(AE = ae, DM = dm, DS = ds), other_domains)
-  iwalk(export_datasets, ~ write_csv(.x, file.path(output_csv_dir, str_c(.y, "_dummy.csv")), na = ""))
-
   # 生成過程の全オブジェクト(dm/ae/ds/cdisc_variable_values/presence_conditions等)を、
   # 呼び出し元のグローバル環境に代入する(source()実行後の状態と同様に直接参照できるようにするため)
   list2env(as.list(environment()), envir = .GlobalEnv)
