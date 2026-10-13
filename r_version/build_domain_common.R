@@ -1031,27 +1031,9 @@ build_cross_prefix_edges <- function(presence_conditions, field_ref_bounds, cdis
 }
 
 # prefixes を、edges(from依存toの依存関係)に基づいて依存先が先に来るように並べ替える(トポロジカルソート)。
-# 循環参照がある場合は、それ以上並べ替えできない分をそのまま残りの順序で追加する
-topo_sort_prefixes <- function(prefixes, edges) {
-  edges <- edges %>% filter(from %in% prefixes, to %in% prefixes)
-  remaining <- prefixes
-  ordered <- character(0)
-  while (length(remaining) > 0) {
-    ready <- remaining[!vapply(remaining, function(p) any(edges[["from"]] == p & edges[["to"]] %in% remaining), logical(1))]
-    if (length(ready) == 0) {
-      ordered <- c(ordered, remaining)
-      break
-    }
-    ordered <- c(ordered, ready)
-    remaining <- setdiff(remaining, ready)
-  }
-  ordered
-}
-
-# topo_sort_prefixes()と同じアルゴリズムだが、循環(依存が解決できず「ready」が空になる時点)に
-# 達したら、そこで打ち切ってordered(そこまでに確定した順序)とremaining(未解決のまま残った、
-# 循環に関与する・またはそれに依存しているprefix集合)を分けて返す。build_other_domains()が、
-# remainingの部分だけをシート(alias_name)単位で改めて依存解決するために使う
+# 循環(依存が解決できず「ready」が空になる時点)に達したら、そこで打ち切ってordered(そこまでに確定した
+# 順序)とremaining(未解決のまま残った、循環に関与する・またはそれに依存しているprefix集合)を分けて
+# 返す。build_other_domains()が、remainingの部分だけをシート(alias_name)単位で改めて依存解決するために使う
 topo_sort_prefixes_with_leftover <- function(prefixes, edges) {
   edges <- edges %>% filter(from %in% prefixes, to %in% prefixes)
   remaining <- prefixes
@@ -1113,7 +1095,7 @@ build_alias_level_edges <- function(presence_conditions, field_ref_bounds, cdisc
 }
 
 # nodes(prefix, alias_name)を、edges(from_prefix, from_alias, to_prefix, to_alias。fromはtoに依存する)に
-# 基づいてトポロジカルソートする。topo_sort_prefixes()の(prefix, alias_name)複合キー版。
+# 基づいてトポロジカルソートする((prefix, alias_name)の複合キーを1つのノードとして扱う版)。
 # 循環参照が残った場合は、それ以上並べ替えできない分をそのまま残りの順序で追加する(安全策)
 topo_sort_prefix_aliases <- function(nodes, edges) {
   node_key <- function(prefix, alias) str_c(prefix, "", alias)

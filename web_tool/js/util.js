@@ -352,17 +352,16 @@ function addDaysToDateString(dateStr, days) {
 }
 
 // tibble的な行オブジェクトの配列をCSV文字列に変換する。
-// RのNA相当(null/undefined)は空欄として出力する(文字列としての"NA"とは区別するため)。
+// RのNA相当(null/undefined)は空欄("")として出力する(文字列としての"NA"とは区別するため)。
 // 改行はLF、先頭にBOM(U+FEFF)を付ける(Windows版Excelでの文字化け防止のため、
-// UTF-8 with BOMとして出力する)
+// UTF-8 with BOMとして出力する)。
+// 値の内容(カンマ・改行・ダブルクオーテーションの有無)に関わらず、見出し行(変数名)も含めて
+// 常に全項目をダブルクオーテーションで囲む(SASのPROC IMPORTが、クオート無しの日付文字列の列
+// (例: 2025-11-09)を数値の日付型と誤認識してしまう問題への対策)
 function toCsv(rows, columns) {
   const escapeCell = (value) => {
-    if (value === null || value === undefined) return "";
-    const s = String(value);
-    if (/[",\n]/.test(s)) {
-      return '"' + s.replace(/"/g, '""') + '"';
-    }
-    return s;
+    const s = value === null || value === undefined ? "" : String(value);
+    return '"' + s.replace(/"/g, '""') + '"';
   };
   const header = columns.map(escapeCell).join(",");
   const body = rows.map((row) => columns.map((col) => escapeCell(row[col])).join(",")).join("\n");
