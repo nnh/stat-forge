@@ -800,11 +800,25 @@ function buildNumericBounds(validatorTable, fieldLookup) {
 // numericBoundsはcdisc_variable単位に集約されるため、LBORRESのように同じcdisc_variable名を
 // 多数のTESTCD別フィールドが共有するケースでは使えない(全フィールドのmin/maxが「厳しい方」で
 // 一律にまとまってしまう)。buildDateRefBoundsと同じく(alias_name, label, cdisc_variable)単位で
-// 集約せず個別に保持したバージョンを別途用意する(LB/TR/VSのORRES生成で使う)(Rのfield_numeric_boundsに対応)
+// 集約せず個別に保持したバージョンを別途用意する(数値項目の値生成で使う)(Rのfield_numeric_boundsに対応)。
+// numericalityが設定されていればmin/maxが未設定(数値であることのみ)の項目も、min_value/max_valueとも
+// nullの行として含める(DUMMYではなく数値を生成させるため)
 function buildFieldNumericBounds(validatorTable, fieldLookup) {
   const perGroup = {};
   const seen = new Set();
+  const ensureGroup = (aliasName, own) => {
+    const groupKey = `${aliasName}|${own.label}|${own.cdisc_variable}`;
+    if (!perGroup[groupKey]) {
+      perGroup[groupKey] = { alias_name: aliasName, label: own.label != null ? own.label : null, cdisc_variable: own.cdisc_variable, mins: [], maxs: [] };
+    }
+    return perGroup[groupKey];
+  };
   validatorTable.forEach((vr) => {
+    if (vr.validator_type === "numericality") {
+      lookupField(fieldLookup, vr.alias_name, vr.field_name).forEach((own) => {
+        if (own.cdisc_variable != null) ensureGroup(vr.alias_name, own);
+      });
+    }
     if (vr.bound_type == null || vr.numeric_value == null) return;
     if (vr.bound_type !== "min_value" && vr.bound_type !== "max_value") return;
     const key = `${vr.alias_name}|${vr.field_name}|${vr.bound_type}|${vr.numeric_value}`;
@@ -812,12 +826,9 @@ function buildFieldNumericBounds(validatorTable, fieldLookup) {
     seen.add(key);
     lookupField(fieldLookup, vr.alias_name, vr.field_name).forEach((own) => {
       if (own.cdisc_variable == null) return;
-      const groupKey = `${vr.alias_name}|${own.label}|${own.cdisc_variable}`;
-      if (!perGroup[groupKey]) {
-        perGroup[groupKey] = { alias_name: vr.alias_name, label: own.label != null ? own.label : null, cdisc_variable: own.cdisc_variable, mins: [], maxs: [] };
-      }
-      if (vr.bound_type === "min_value") perGroup[groupKey].mins.push(vr.numeric_value);
-      else perGroup[groupKey].maxs.push(vr.numeric_value);
+      const group = ensureGroup(vr.alias_name, own);
+      if (vr.bound_type === "min_value") group.mins.push(vr.numeric_value);
+      else group.maxs.push(vr.numeric_value);
     });
   });
   return Object.values(perGroup)
@@ -827,8 +838,7 @@ function buildFieldNumericBounds(validatorTable, fieldLookup) {
       cdisc_variable: g.cdisc_variable,
       min_value: g.mins.length > 0 ? Math.max(...g.mins) : null,
       max_value: g.maxs.length > 0 ? Math.min(...g.maxs) : null,
-    }))
-    .filter((r) => r.min_value != null || r.max_value != null);
+    }));
 }
 
 // formulaでフィールド同士を比較している行(例: f350<=f59)から、(cdisc_variable, ref_cdisc_variable, bound_type)を作る
