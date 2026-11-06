@@ -90,7 +90,7 @@ r_version/
     ├── validate_test1_shared.R / validate_test2_shared.R
     │                               # test1/test2で共通の検証処理
     ├── validate_datasets_test3_fa.R  # test3のFA特別チェック(test3_webからsource)
-    └── validate_datasets_test1_web.R / test2_web.R / test3_web.R / test4_web.R / test5_web.R
+    └── validate_datasets_test1_web.R / test2_web.R / test3_web.R / test4_web.R / test5_web.R / test6_web.R
                                     # Webツール生成CSVを検証するテスト本体
 
 scripts/
@@ -118,6 +118,7 @@ package.json                        # scripts/の依存パッケージ(Playwrigh
 - `r_version/tools/validate_datasets_test3_web.R`
 - `r_version/tools/validate_datasets_test4_web.R`
 - `r_version/tools/validate_datasets_test5_web.R`
+- `r_version/tools/validate_datasets_test6_web.R`
 
 ##### セットアップ
 
