@@ -308,25 +308,44 @@ function addAeMeddraCodingBlock(ae, meddraSample, prefix) {
 // 正しく判定できるようになる。戻り値のlinkedSpecは、実際に追加したprefix/alias_nameの一覧
 // (呼び出し側で、二重生成を避けるための除外や、後でsplitLinkedDomains()に分離する際に使う)
 // (Rのpopulate_linked_blocks()に対応)
+// 同じalias_name内に同じprefixのブロック(cdisc_sheet_configs。labelで区別)が複数ある場合
+// (例: test6のaeシートのSUPPQUAL(AERELPEM/AEACNPEM)×2)、cdisc_variable名(QNAM/QVAL等)が
+// ブロック間で重複するため、cdisc_variable単位で1列にすると全ブロックの選択肢・固定値が1つの候補に
+// まとめられ、列ごとに独立にサンプリングされてブロック間の値の組み合わせが崩れる。そのような
+// ブロックの項目は"cdisc_variable#label"の列(linkedSpecのcolumn_key)としてブロックごとに別々に生成し、
+// splitLinkedDomains()でブロックごとの別レコードに分離する。ブロックが1つだけの場合は
+// column_key==cdisc_variableとなり従来と同じ動作になる
 function populateLinkedBlocks(data, cdiscVariableValues, excludePrefix, registrationStartDate, meddraData, whoDrugIdf, dateRefBoundsAll) {
   const ownAliasNames = new Set(data.map((r) => r.alias_name));
-  const linkedSpec = cdiscVariableValues.filter((r) => r.prefix !== excludePrefix && ownAliasNames.has(r.alias_name));
+  const rawLinkedSpec = cdiscVariableValues.filter((r) => r.prefix !== excludePrefix && ownAliasNames.has(r.alias_name));
+  const blockLabelsByPrefixAlias = new Map();
+  rawLinkedSpec.forEach((r) => {
+    const key = `${r.prefix}|${r.alias_name}`;
+    if (!blockLabelsByPrefixAlias.has(key)) blockLabelsByPrefixAlias.set(key, new Set());
+    blockLabelsByPrefixAlias.get(key).add(r.label);
+  });
+  const linkedSpec = rawLinkedSpec.map((r) => {
+    const isMultiBlock = blockLabelsByPrefixAlias.get(`${r.prefix}|${r.alias_name}`).size > 1;
+    return { ...r, column_key: isMultiBlock ? `${r.cdisc_variable}#${r.label}` : r.cdisc_variable };
+  });
 
   if (linkedSpec.length === 0) {
     return { data, linkedSpec };
   }
 
   const drugNames = whoDrugIdf ? [...new Set(whoDrugIdf.map((r) => r.full_name_en).filter((v) => v != null))] : [];
-  let linkedVars = [...new Set(linkedSpec.map((r) => r.cdisc_variable))];
+  // linkedVarsはcolumn_key(ブロックが1つだけならcdisc_variableと同じ)の一覧
+  let linkedVars = [...new Set(linkedSpec.map((r) => r.column_key))];
+  const baseVarByColumnKey = new Map(linkedSpec.map((r) => [r.column_key, r.cdisc_variable]));
   const doseChoices = ["50", "100", "150", "200", "250", "300", "400", "500"];
   const today = new Date().toISOString().slice(0, 10);
 
   // date型の変数同士が他フィールド参照で数珠つなぎに依存し合う場合(buildRepeatedDomain()と同じ理由)、
   // 参照先が先に生成されるよう並べ替える
-  const linkedVarSet = new Set(linkedVars);
-  const dateRefBounds = (dateRefBoundsAll || []).filter((r) => linkedVarSet.has(r.cdisc_variable));
+  const linkedBaseVarSet = new Set(linkedSpec.map((r) => r.cdisc_variable));
+  const dateRefBounds = (dateRefBoundsAll || []).filter((r) => linkedBaseVarSet.has(r.cdisc_variable));
   {
-    const linkedDateVars = [...new Set(linkedSpec.filter((r) => r.field_type === "date").map((r) => r.cdisc_variable))].filter((v) =>
+    const linkedDateVars = [...new Set(linkedSpec.filter((r) => r.field_type === "date").map((r) => r.column_key))].filter((v) =>
       linkedVars.includes(v)
     );
     const sortedDateVars = sortDateVarsByDependency(linkedDateVars, dateRefBounds);
@@ -335,9 +354,10 @@ function populateLinkedBlocks(data, cdiscVariableValues, excludePrefix, registra
   }
 
   linkedVars.forEach((varName) => {
-    const dateMinRow = dateRefBounds.find((r) => r.cdisc_variable === varName && r.bound_type === "min_date" && r.ref_cdisc_variable in data[0]);
-    const dateMaxRow = dateRefBounds.find((r) => r.cdisc_variable === varName && r.bound_type === "max_date" && r.ref_cdisc_variable in data[0]);
-    const varSpec = linkedSpec.filter((r) => r.cdisc_variable === varName);
+    const baseVar = baseVarByColumnKey.get(varName);
+    const dateMinRow = dateRefBounds.find((r) => r.cdisc_variable === baseVar && r.bound_type === "min_date" && r.ref_cdisc_variable in data[0]);
+    const dateMaxRow = dateRefBounds.find((r) => r.cdisc_variable === baseVar && r.bound_type === "max_date" && r.ref_cdisc_variable in data[0]);
+    const varSpec = linkedSpec.filter((r) => r.column_key === varName);
     const specByAlias = new Map();
     varSpec.forEach((r) => {
       if (!specByAlias.has(r.alias_name)) {
@@ -427,7 +447,7 @@ function populateLinkedBlocks(data, cdiscVariableValues, excludePrefix, registra
             row[varName] = sampleOne(drugNames);
           });
         }
-      } else if (/DOSE$/.test(varName)) {
+      } else if (/DOSE$/.test(baseVar)) {
         rows.forEach((row) => {
           row[varName] = sampleOne(doseChoices);
         });
@@ -444,25 +464,53 @@ function populateLinkedBlocks(data, cdiscVariableValues, excludePrefix, registra
 
 // populateLinkedBlocks()で同じ行に追加した列を、prefixごとの別テーブルに分離する。
 // sourceSpidCol(例: AESPID)の値をそのままprefixSPID(例: FASPID)として引き継ぐことで、
-// どのAE報告インスタンスに対応するリンク行かが分かるようにする(Rのsplit_linked_domains()に対応)
+// どのAE報告インスタンスに対応するリンク行かが分かるようにする(Rのsplit_linked_domains()に対応)。
+// 同じalias_name内に同じprefixのブロックが複数ある場合(column_keyが"cdisc_variable#label"の列)は、
+// 1行のAE報告からブロックごとに1行ずつ(label順)のレコードを作り、column_keyの列をcdisc_variable名に戻す
 function splitLinkedDomains(data, linkedSpec, sourceSpidCol) {
   if (!linkedSpec || linkedSpec.length === 0) return {};
 
   const prefixes = [...new Set(linkedSpec.map((r) => r.prefix))];
   const result = {};
   prefixes.forEach((px) => {
-    const pxAliasNames = new Set(linkedSpec.filter((r) => r.prefix === px).map((r) => r.alias_name));
-    const pxVars = [...new Set(linkedSpec.filter((r) => r.prefix === px).map((r) => r.cdisc_variable))];
+    const pxSpec = linkedSpec.filter((r) => r.prefix === px);
+    const pxAliasNames = new Set(pxSpec.map((r) => r.alias_name));
+    const pxVars = [...new Set(pxSpec.filter((r) => (r.column_key || r.cdisc_variable) === r.cdisc_variable).map((r) => r.cdisc_variable))];
+    // alias_name -> (label -> (column_key -> cdisc_variable))。複数ブロックのalias_nameだけ持つ
+    const multiBlocksByAlias = new Map();
+    pxSpec.forEach((r) => {
+      if ((r.column_key || r.cdisc_variable) === r.cdisc_variable) return;
+      if (!multiBlocksByAlias.has(r.alias_name)) multiBlocksByAlias.set(r.alias_name, new Map());
+      const blocks = multiBlocksByAlias.get(r.alias_name);
+      if (!blocks.has(r.label)) blocks.set(r.label, new Map());
+      blocks.get(r.label).set(r.column_key, r.cdisc_variable);
+    });
     const spidVar = `${px}SPID`;
-    result[px] = data
+    const baseRow = (row) => {
+      const newRow = { STUDYID: row.STUDYID, DOMAIN: px, USUBJID: row.USUBJID, alias_name: row.alias_name };
+      newRow[spidVar] = row[sourceSpidCol];
+      return newRow;
+    };
+    result[px] = [];
+    data
       .filter((row) => pxAliasNames.has(row.alias_name))
-      .map((row) => {
-        const newRow = { STUDYID: row.STUDYID, DOMAIN: px, USUBJID: row.USUBJID, alias_name: row.alias_name };
-        newRow[spidVar] = row[sourceSpidCol];
-        pxVars.forEach((v) => {
-          if (v in row) newRow[v] = row[v];
+      .forEach((row) => {
+        const blocks = multiBlocksByAlias.get(row.alias_name);
+        if (!blocks) {
+          const newRow = baseRow(row);
+          pxVars.forEach((v) => {
+            if (v in row) newRow[v] = row[v];
+          });
+          result[px].push(newRow);
+          return;
+        }
+        [...blocks.keys()].sort().forEach((label) => {
+          const newRow = baseRow(row);
+          blocks.get(label).forEach((cdiscVariable, columnKey) => {
+            if (columnKey in row) newRow[cdiscVariable] = row[columnKey];
+          });
+          result[px].push(newRow);
         });
-        return newRow;
       });
   });
   return result;
@@ -544,7 +592,7 @@ function finalizeAeDomain(ae, aeSpec, linkedSpec) {
   });
 
   const linked = splitLinkedDomains(ae, linkedSpec || [], "AESPID");
-  const linkedVars = new Set((linkedSpec || []).map((r) => r.cdisc_variable));
+  const linkedVars = new Set((linkedSpec || []).flatMap((r) => [r.cdisc_variable, r.column_key || r.cdisc_variable]));
   ae.forEach((row) => {
     delete row.alias_name;
     delete row.RFSTDTC;
