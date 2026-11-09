@@ -82,6 +82,20 @@ run_target_value_checks <- function(data, domain) {
   str_c(target, suffix) %>% walk(~ run_value_equals_checks_from_csv(data, domain, .x, fixed_value_checks_csv_path))
 }
 
+# AE(ae1〜ae3)。重篤性・評価項目はsuffix無しでCSV登録している。重篤性サブ基準(AESDTH/AESLIFE/
+# AESHOSP/AESDISAB/AESCONG/AESMIE)はAESER=="Y"の時のみ必須(それ以外は空欄)
+c("AETERM", "AETOXGR", "AESTDTC", "AESER", "AEACN", "AEREL", "AEOUT", "AEENDTC") %>%
+  check_required_vars(ae, ., domain_name = "AE")
+c("AESER", "AETOXGR", "AEACN", "AEREL", "AEOUT") %>%
+  walk(~ run_value_equals_checks_from_csv(ae, "AE", .x, fixed_value_checks_csv_path))
+target_ae_cols <- c("AESDTH", "AESLIFE", "AESHOSP", "AESDISAB", "AESCONG", "AESMIE")
+tmp_ae_y <- ae %>% filter(AESER == "Y")
+target_ae_cols %>% walk(~ run_value_equals_checks_from_csv(tmp_ae_y, "AE", .x, fixed_value_checks_csv_path))
+tmp_ae_y %>% check_required_vars(target_ae_cols, domain_name = "AE")
+ae %>% filter(AESER != "Y") %>% check_blank_vars(target_ae_cols, domain_name = "AE")
+"AESTDTC" %>% check_date_before_today(ae, ., domain_name = "AE")
+"AEENDTC" %>% check_date_after_var_before_today(ae, ., "AESTDTC", domain_name = "AE")
+
 # CM(screening_100のPRIOR TREATMENT・BEFORE・START OF TREATMENT)
 tmp_cm_prior <- cm %>%
   filter(CMSPID == "screening_100" & CMCAT == "PRIOR TREATMENT" & CMENRTPT == "BEFORE" & CMENTPT == "START OF TREATMENT")
@@ -110,6 +124,118 @@ age_years <- function(birth_date, ref_date) {
   years - as.integer(!had_birthday)
 }
 dm <- dm %>% mutate(age_at_consent = age_years(BRTHDTC, RFICDTC))
+
+# DS(DSSPIDがdiscon、DSCATがDISPOSITION EVENT、EPOCHがTREATMENT)
+suffix <- "_1"
+target <- "DSTERM"
+tmp_ds_1 <- ds %>% filter(DSSPID == "discon" & DSCAT == "DISPOSITION EVENT" & EPOCH == "TREATMENT")
+label <- "DS(discon/DISPOSITION EVENT/TREATMENT)"
+tmp_ds_1 %>% check_not_empty("レコード有無チェック", domain_name = label)
+c("DSTERM", "DSSTDTC") %>% check_required_vars(tmp_ds_1, ., domain_name = label)
+tmp_ds_1 %>%
+  rename_with(~ str_c(.x, suffix), all_of(target)) %>%
+  run_target_value_checks("DS")
+tmp_ds_1 %>% check_date_before_today("DSSTDTC", domain_name = label)
+
+# DS(DSSPIDがwithdrawal)
+suffix <- "_2"
+target <- c("DSTERM", "DSCAT", "EPOCH")
+tmp_ds_2 <- ds %>% filter(DSSPID == "withdrawal")
+label <- "DS(withdrawal)"
+tmp_ds_2 %>% check_not_empty("レコード有無チェック", domain_name = label)
+c("DSTERM", "EPOCH", "DSSTDTC") %>% check_required_vars(tmp_ds_2, ., domain_name = label)
+tmp_ds_2 %>%
+  rename_with(~ str_c(.x, suffix), all_of(target)) %>%
+  run_target_value_checks("DS")
+tmp_ds_2 %>% check_date_before_today("DSSTDTC", domain_name = label)
+
+# DS(DSSPIDがdisconpem)
+suffix <- "_3"
+target <- c("DSTERM", "DSCAT", "DSSCAT", "EPOCH")
+tmp_ds_3 <- ds %>% filter(DSSPID == "disconpem")
+label <- "DS(disconpem)"
+tmp_ds_3 %>% check_not_empty("レコード有無チェック", domain_name = label)
+c("DSTERM", "DSSTDTC") %>% check_required_vars(tmp_ds_3, ., domain_name = label)
+tmp_ds_3 %>%
+  rename_with(~ str_c(.x, suffix), all_of(target)) %>%
+  run_target_value_checks("DS")
+tmp_ds_3 %>% check_date_before_today("DSSTDTC", domain_name = label)
+
+
+# EC(ECSPIDがec_200、ECTRTがIVONESCIMAB)
+suffix <- "_1"
+target <- c("ECMOOD", "ECPRESP", "ECOCCUR", "ECDOSU", "ECDOSFRM", "ECROUTE")
+tmp_ec_1 <- ec %>% filter(ECSPID == "ec_200" & ECTRT == "IVONESCIMAB")
+tmp_ec_1 %>% check_not_empty("レコード有無チェック", domain_name = "EC(IVONESCIMAB)")
+tmp_ec_1 %>%
+  rename_with(~ str_c(.x, suffix), all_of(target)) %>%
+  run_target_value_checks("EC")
+# ECADJは空欄を許容し、値が入っている行のみCSVの選択肢でチェックする
+target <- "ECADJ"
+tmp_ec_1 %>%
+  filter(ECADJ != "") %>%
+  rename_with(~ str_c(.x, suffix), all_of(target)) %>%
+  run_target_value_checks("EC")
+c("ECDOSE", "ECSTDTC", "ECENDTC") %>% check_required_vars(tmp_ec_1, ., domain_name = "EC(IVONESCIMAB)")
+tmp_ec_1 %>% check_date_before_today("ECSTDTC", domain_name = "EC(IVONESCIMAB)")
+tmp_ec_1 %>% check_date_before_today("ECENDTC", domain_name = "EC(IVONESCIMAB)")
+
+# EC(ECSPIDがec_200、ECTRTがPEMETREXED SODIUM HYDRATE)
+suffix <- "_2"
+target <- c("ECMOOD", "ECPRESP", "ECOCCUR", "ECDOSU", "ECDOSFRM", "ECROUTE")
+tmp_ec_2 <- ec %>% filter(ECSPID == "ec_200" & ECTRT == "PEMETREXED SODIUM HYDRATE")
+tmp_ec_2 %>% check_not_empty("レコード有無チェック", domain_name = "EC(PEMETREXED)")
+tmp_ec_2 %>%
+  rename_with(~ str_c(.x, suffix), all_of(target)) %>%
+  run_target_value_checks("EC")
+# ECADJは空欄を許容し、値が入っている行のみCSVの選択肢でチェックする
+target <- "ECADJ"
+tmp_ec_2 %>%
+  filter(ECADJ != "") %>%
+  rename_with(~ str_c(.x, suffix), all_of(target)) %>%
+  run_target_value_checks("EC")
+tmp_ec_2 %>% check_required_vars("ECDOSE", domain_name = "EC(PEMETREXED)")
+tmp_ec_2 %>% check_date_before_today("ECSTDTC", domain_name = "EC(PEMETREXED)")
+tmp_ec_2 %>% check_date_before_today("ECENDTC", domain_name = "EC(PEMETREXED)")
+
+# EG(EGSPIDがlab_100)。suffixはEGTESTCDごとにCSVの番号(_1〜_3)に対応させる
+eg_suffixes <- c(INTP = "_1", QTCFSB = "_2", QTCUNS = "_3")
+for (egtestcd in names(eg_suffixes)) {
+  suffix <- eg_suffixes[[egtestcd]]
+  tmp_eg_1 <- eg %>% filter(EGSPID == "lab_100" & EGTESTCD == egtestcd)
+  label <- str_c("EG(", egtestcd, ")")
+  tmp_eg_1 %>% check_not_empty("レコード有無チェック", domain_name = label)
+  # INTPはEGTESTとEGORRES(NOT DONE以外の行)、QTCFSB/QTCUNSはEGTESTとEGORRESUの固定値チェック
+  target <- if (egtestcd == "INTP") "EGTEST" else c("EGTEST", "EGORRESU")
+  tmp_eg_1 %>%
+    rename_with(~ str_c(.x, suffix), all_of(target)) %>%
+    run_target_value_checks("EG")
+  if (egtestcd == "INTP") {
+    target <- "EGORRES"
+    tmp_eg_1 %>%
+      filter(EGSTAT != "NOT DONE") %>%
+      rename_with(~ str_c(.x, suffix), all_of(target)) %>%
+      run_target_value_checks("EG")
+    tmp_eg_1 %>% check_blank_vars("EGORRESU", domain_name = label)
+  } else {
+    # QTCFSB/QTCUNSはEGORRESが入っている行が全て数値であること
+    egorres <- tmp_eg_1 %>% filter(EGORRES != "") %>% pull(EGORRES)
+    non_numeric <- egorres[is.na(suppressWarnings(as.numeric(egorres)))]
+    if (length(non_numeric) > 0) {
+      stop(str_c(label, ": EGORRES数値チェック: ", length(non_numeric), "件NG(数値以外の値: ", quote_join(unique(non_numeric)), ")"))
+    }
+    cat(label, ": EGORRES数値チェック: OK(EGORRESが全", length(egorres), "行で数値)\n", sep = "")
+  }
+  # EGSTATがNOT DONEの行はEGORRESが空欄、それ以外の行はEGORRESが必須
+  tmp_eg_1 %>%
+    filter(EGSTAT == "NOT DONE") %>%
+    check_blank_vars("EGORRES", domain_name = str_c("EG(", egtestcd, "/NOT DONE)"))
+  tmp_eg_1 %>%
+    filter(EGSTAT != "NOT DONE") %>%
+    check_required_vars("EGORRES", domain_name = label)
+  tmp_eg_1 %>% check_required_vars("EGDTC", domain_name = label)
+  tmp_eg_1 %>% check_date_before_today("EGDTC", domain_name = label)
+}
 
 # IE
 suffix <- "_1"
@@ -154,6 +280,55 @@ for (i in 1:25) {
     rename_with(~ str_c(.x, suffix), all_of(target)) %>%
     run_target_value_checks("IE")
 }
+
+# LB(LBSPIDがlab_100)。suffixはLBTESTCDごとにCSVの番号に対応させる
+lb_suffixes <- c(WBC = "_1", NEUT = "_2", RBC = "_3", HGB = "_4", PLAT = "_5", ALB = "_6", BILI = "_7",
+                 AST = "_8", ALT = "_9", LDH = "_10", ALP = "_11", GGT = "_12", CK = "_13", AMYLASE = "_14",
+                 UREAN = "_15", CREAT = "_16", SODIUM = "_17", K = "_18", CA = "_19", GLUC = "_20", CRP = "_21",
+                 INR = "_22", TSH = "_23", T4FR = "_24",
+                 PROT = "_25", PROTEXR = "_26")
+# 単位(LBORRESU)が無い検査。LBORRESUは固定値チェックの対象から外し、空欄であることをチェックする
+lb_no_unit <- c("INR", "PROT")
+# LBORRESが選択式の検査。数値チェックの代わりにNOT DONE以外の行のLBORRESをCSVの選択肢でチェックする
+lb_categorical <- c("PROT")
+target <- c("LBTEST", "LBCAT", "LBORRESU", "LBSPEC")
+for (lbtestcd in names(lb_suffixes)) {
+  suffix <- lb_suffixes[[lbtestcd]]
+  tmp_lb_1 <- lb %>% filter(LBSPID == "lab_100" & LBTESTCD == lbtestcd)
+  label <- str_c("LB(", lbtestcd, ")")
+  tmp_lb_1 %>% check_not_empty("レコード有無チェック", domain_name = label)
+  lb_target <- if (lbtestcd %in% lb_no_unit) setdiff(target, "LBORRESU") else target
+  str_c(lb_target, suffix) %>%
+    walk(~ run_value_equals_checks_from_csv(tmp_lb_1 %>% rename_with(~ str_c(.x, suffix), all_of(lb_target)),
+                                            "LB", .x, fixed_value_checks_csv_path))
+  if (lbtestcd %in% lb_no_unit) {
+    tmp_lb_1 %>% check_blank_vars("LBORRESU", domain_name = label)
+  }
+  # LBSTATがNOT DONEの行はLBORRESが空欄、それ以外の行はLBORRESが必須
+  tmp_lb_1 %>%
+    filter(LBSTAT == "NOT DONE") %>%
+    check_blank_vars("LBORRES", domain_name = str_c("LB(", lbtestcd, "/NOT DONE)"))
+  tmp_lb_1 %>%
+    filter(LBSTAT != "NOT DONE") %>%
+    check_required_vars("LBORRES", domain_name = label)
+  if (lbtestcd %in% lb_categorical) {
+    tmp_lb_1 %>%
+      filter(LBSTAT != "NOT DONE") %>%
+      rename(!!str_c("LBORRES", suffix) := LBORRES) %>%
+      run_value_equals_checks_from_csv("LB", str_c("LBORRES", suffix), fixed_value_checks_csv_path)
+  } else {
+    # LBORRESが入っている行は全て数値であること
+    lborres <- tmp_lb_1 %>% filter(LBORRES != "") %>% pull(LBORRES)
+    non_numeric <- lborres[is.na(suppressWarnings(as.numeric(lborres)))]
+    if (length(non_numeric) > 0) {
+      stop(str_c(label, ": LBORRES数値チェック: ", length(non_numeric), "件NG(数値以外の値: ", quote_join(unique(non_numeric)), ")"))
+    }
+    cat(label, ": LBORRES数値チェック: OK(LBORRESが全", length(lborres), "行で数値)\n", sep = "")
+  }
+  tmp_lb_1 %>% check_required_vars("LBDTC", domain_name = label)
+  tmp_lb_1 %>% check_date_before_today("LBDTC", domain_name = label)
+}
+
 
 # MH
 suffix <- "_1"
@@ -337,6 +512,80 @@ tmp_rs_2 %>% check_blank_vars("RSEVAL", domain_name = "RS(ECOG101)")
 tmp_rs_2 %>% check_required_vars("RSDTC", domain_name = "RS(ECOG101)")
 tmp_rs_2 %>% check_date_before_today("RSDTC", domain_name = "RS(ECOG101)")
 
+# RS(evaluation_400(Week6)とevaluationpd(PDによる治験治療中止時)は同じ定義のため同じチェックを行う)
+for (rsspid in c("evaluation_400", "evaluationpd")) {
+  # RS(RSTESTCDがTRGRESP)
+  suffix <- "_3"
+  target <- c("RSSCAT", "RSTEST", "RSCAT", "RSEVAL")
+  tmp_rs_3 <- rs %>% filter(RSSPID == rsspid & RSTESTCD == "TRGRESP")
+  label <- str_c("RS(", rsspid, "/TRGRESP)")
+  tmp_rs_3 %>% check_not_empty("レコード有無チェック", domain_name = label)
+  tmp_rs_3 %>%
+    rename_with(~ str_c(.x, suffix), all_of(target)) %>%
+    run_target_value_checks("RS")
+  # RSSTATがNOT DONEの行はRSORRES・RSDTCが空欄、それ以外の行はこれらが必須でRSORRESは選択肢のいずれか
+  tmp_rs_3 %>%
+    filter(RSSTAT == "NOT DONE") %>%
+    check_blank_vars(c("RSORRES", "RSDTC"), domain_name = str_c(label, "/NOT DONE"))
+  tmp_rs_3 %>%
+    filter(RSSTAT != "NOT DONE") %>%
+    check_required_vars(c("RSORRES", "RSDTC"), domain_name = label)
+  target <- "RSORRES"
+  tmp_rs_3 %>%
+    filter(RSSTAT != "NOT DONE") %>%
+    rename_with(~ str_c(.x, suffix), all_of(target)) %>%
+    run_target_value_checks("RS")
+  tmp_rs_3 %>% check_date_before_today("RSDTC", domain_name = label)
+
+  # RS(RSTESTCDがOVRLRESP、RSCATがRECIST 1.1)
+  suffix <- "_4"
+  target <- c("RSTEST", "RSEVAL")
+  tmp_rs_4 <- rs %>% filter(RSSPID == rsspid & RSTESTCD == "OVRLRESP" & RSCAT == "RECIST 1.1")
+  label <- str_c("RS(", rsspid, "/OVRLRESP/RECIST 1.1)")
+  tmp_rs_4 %>% check_not_empty("レコード有無チェック", domain_name = label)
+  tmp_rs_4 %>%
+    rename_with(~ str_c(.x, suffix), all_of(target)) %>%
+    run_target_value_checks("RS")
+  # RSSTATがNOT DONEの行はRSORRESが空欄、それ以外の行はRSORRESが必須で選択肢のいずれか
+  tmp_rs_4 %>%
+    filter(RSSTAT == "NOT DONE") %>%
+    check_blank_vars("RSORRES", domain_name = str_c(label, "/NOT DONE"))
+  tmp_rs_4 %>%
+    filter(RSSTAT != "NOT DONE") %>%
+    check_required_vars("RSORRES", domain_name = label)
+  target <- "RSORRES"
+  tmp_rs_4 %>%
+    filter(RSSTAT != "NOT DONE") %>%
+    rename_with(~ str_c(.x, suffix), all_of(target)) %>%
+    run_target_value_checks("RS")
+  # RSORRESが入っている行はRSDTCが必須
+  tmp_rs_4 %>%
+    filter(RSORRES != "") %>%
+    check_required_vars("RSDTC", domain_name = label)
+  tmp_rs_4 %>% check_date_before_today("RSDTC", domain_name = label)
+
+  # RS(RSTESTCDがOVRLRESP、RSCATがiRECIST)
+  suffix <- "_5"
+  target <- c("RSTEST", "RSEVAL")
+  tmp_rs_5 <- rs %>% filter(RSSPID == rsspid & RSTESTCD == "OVRLRESP" & RSCAT == "iRECIST")
+  label <- str_c("RS(", rsspid, "/OVRLRESP/iRECIST)")
+  tmp_rs_5 %>% check_not_empty("レコード有無チェック", domain_name = label)
+  tmp_rs_5 %>%
+    rename_with(~ str_c(.x, suffix), all_of(target)) %>%
+    run_target_value_checks("RS")
+  # RSORRESは必須ではない。RSORRESが入っている行はRSORRESが選択肢のいずれかで、RSDTCが必須かつ今日以前
+  target <- "RSORRES"
+  tmp_rs_5 %>%
+    filter(RSORRES != "") %>%
+    rename_with(~ str_c(.x, suffix), all_of(target)) %>%
+    run_target_value_checks("RS")
+  tmp_rs_5 %>%
+    filter(RSORRES != "") %>%
+    check_required_vars("RSDTC", domain_name = label)
+  tmp_rs_5 %>%
+    filter(RSORRES != "") %>%
+    check_date_before_today("RSDTC", domain_name = label)
+}
 
 
 # SU(SUCATがTOBACCOはsuffix=_1、ALCOHOLは_2)
@@ -443,3 +692,128 @@ for (vstestcd in names(vs_suffixes)) {
   tmp_vs_1 %>% check_required_vars("VSDTC", domain_name = label)
   tmp_vs_1 %>% check_date_before_today("VSDTC", domain_name = label)
 }
+
+
+# TR(evaluation_400(Week6)とevaluationpd(PDによる治験治療中止時)は同じ定義のため同じチェックを行う)
+for (trspid in c("evaluation_400", "evaluationpd")) {
+  # TR(TRLNKIDがT01〜T05)
+  for (trlnkid in sprintf("T%02d", 1:5)) {
+    # TUMSTATE
+    suffix <- "_3"
+    tmp_tr_3 <- tr %>% filter(TRSPID == trspid & TRLNKID == trlnkid & TRTESTCD == "TUMSTATE")
+    label <- str_c("TR(", trspid, "/", trlnkid, "/TUMSTATE)")
+    tmp_tr_3 %>% check_not_empty("レコード有無チェック", domain_name = label)
+    c("TRTEST", "TREVAL") %>% check_required_vars(tmp_tr_3, ., domain_name = label)
+    target <- c("TRTESTCD", "TRTEST", "TREVAL", "TRGRPID")
+    tmp_tr_3 %>%
+      rename_with(~ str_c(.x, suffix), all_of(target)) %>%
+      run_target_value_checks("TR")
+    # TRSTATがNOT DONEの行はTRORRES・TRMETHOD・TRDTCが空欄、それ以外の行はこれらが必須でTRORRES・TRMETHODは選択肢のいずれか
+    tmp_tr_3 %>%
+      filter(TRSTAT == "NOT DONE") %>%
+      check_blank_vars(c("TRORRES", "TRMETHOD", "TRDTC"), domain_name = str_c(label, "/NOT DONE"))
+    tmp_tr_3 %>%
+      filter(TRSTAT != "NOT DONE") %>%
+      check_required_vars(c("TRORRES", "TRMETHOD", "TRDTC"), domain_name = label)
+    target <- c("TRORRES", "TRMETHOD")
+    tmp_tr_3 %>%
+      filter(TRSTAT != "NOT DONE") %>%
+      rename_with(~ str_c(.x, suffix), all_of(target)) %>%
+      run_target_value_checks("TR")
+    tmp_tr_3 %>% check_date_before_today("TRDTC", domain_name = label)
+
+    # DIAMETER
+    suffix <- "_4"
+    target <- c("TRGRPID", "TRTEST", "TRORRESU", "TREVAL")
+    tmp_tr_4 <- tr %>% filter(TRSPID == trspid & TRLNKID == trlnkid & TRTESTCD == "DIAMETER")
+    label <- str_c("TR(", trspid, "/", trlnkid, "/DIAMETER)")
+    tmp_tr_4 %>% check_not_empty("レコード有無チェック", domain_name = label)
+    tmp_tr_4 %>%
+      rename_with(~ str_c(.x, suffix), all_of(target)) %>%
+      run_target_value_checks("TR")
+    # TRORRESが入っている行は全て数値であること
+    trorres <- tmp_tr_4 %>% filter(TRORRES != "") %>% pull(TRORRES)
+    non_numeric <- trorres[is.na(suppressWarnings(as.numeric(trorres)))]
+    if (length(non_numeric) > 0) {
+      stop(str_c(label, ": TRORRES数値チェック: ", length(non_numeric), "件NG(数値以外の値: ", quote_join(unique(non_numeric)), ")"))
+    }
+    cat(label, ": TRORRES数値チェック: OK(TRORRESが全", length(trorres), "行で数値)\n", sep = "")
+  }
+
+  # TR(TRTESTCDがSUMDIAM)
+  suffix <- "_5"
+  target <- c("TRGRPID", "TRTEST", "TRORRESU", "TREVAL")
+  tmp_tr_5 <- tr %>% filter(TRSPID == trspid & TRTESTCD == "SUMDIAM")
+  label <- str_c("TR(", trspid, "/SUMDIAM)")
+  tmp_tr_5 %>% check_not_empty("レコード有無チェック", domain_name = label)
+  tmp_tr_5 %>%
+    rename_with(~ str_c(.x, suffix), all_of(target)) %>%
+    run_target_value_checks("TR")
+  tmp_tr_5 %>% check_blank_vars("TRLNKID", domain_name = label)
+  # TRSTATがNOT DONEの行はTRORRES・TRDTCが空欄、それ以外の行はこれらが必須
+  tmp_tr_5 %>%
+    filter(TRSTAT == "NOT DONE") %>%
+    check_blank_vars(c("TRORRES", "TRDTC"), domain_name = str_c(label, "/NOT DONE"))
+  tmp_tr_5 %>%
+    filter(TRSTAT != "NOT DONE") %>%
+    check_required_vars(c("TRORRES", "TRDTC"), domain_name = label)
+  # TRORRESが入っている行は全て数値であること
+  trorres <- tmp_tr_5 %>% filter(TRORRES != "") %>% pull(TRORRES)
+  non_numeric <- trorres[is.na(suppressWarnings(as.numeric(trorres)))]
+  if (length(non_numeric) > 0) {
+    stop(str_c(label, ": TRORRES数値チェック: ", length(non_numeric), "件NG(数値以外の値: ", quote_join(unique(non_numeric)), ")"))
+  }
+  cat(label, ": TRORRES数値チェック: OK(TRORRESが全", length(trorres), "行で数値)\n", sep = "")
+  tmp_tr_5 %>% check_date_before_today("TRDTC", domain_name = label)
+
+
+  # TR(TRLNKIDがNT01)
+  suffix <- "_6"
+  target <- c("TRGRPID", "TRTESTCD", "TRTEST", "TREVAL")
+  tmp_tr_6 <- tr %>% filter(TRSPID == trspid & TRLNKID == "NT01")
+  label <- str_c("TR(", trspid, "/NT01)")
+  tmp_tr_6 %>% check_not_empty("レコード有無チェック", domain_name = label)
+  tmp_tr_6 %>%
+    rename_with(~ str_c(.x, suffix), all_of(target)) %>%
+    run_target_value_checks("TR")
+  # TRSTATがNOT DONEの行はTRORRES・TRMETHOD・TRDTCが空欄、それ以外の行はこれらが必須でTRORRES・TRMETHODは選択肢のいずれか
+  tmp_tr_6 %>%
+    filter(TRSTAT == "NOT DONE") %>%
+    check_blank_vars(c("TRORRES", "TRMETHOD", "TRDTC"), domain_name = str_c(label, "/NOT DONE"))
+  tmp_tr_6 %>%
+    filter(TRSTAT != "NOT DONE") %>%
+    check_required_vars(c("TRORRES", "TRMETHOD", "TRDTC"), domain_name = label)
+  target <- c("TRORRES", "TRMETHOD")
+  tmp_tr_6 %>%
+    filter(TRSTAT != "NOT DONE") %>%
+    rename_with(~ str_c(.x, suffix), all_of(target)) %>%
+    run_target_value_checks("TR")
+  tmp_tr_6 %>% check_date_before_today("TRDTC", domain_name = label)
+
+  # TR(TRLNKIDがNEW01)
+  suffix <- "_7"
+  target <- c("TRGRPID", "TRTESTCD", "TRTEST", "TREVAL")
+  tmp_tr_7 <- tr %>% filter(TRSPID == trspid & TRLNKID == "NEW01")
+  label <- str_c("TR(", trspid, "/NEW01)")
+  tmp_tr_7 %>% check_not_empty("レコード有無チェック", domain_name = label)
+  tmp_tr_7 %>%
+    rename_with(~ str_c(.x, suffix), all_of(target)) %>%
+    run_target_value_checks("TR")
+  # TRSTATがNOT DONEの行はTRORRES・TRMETHOD・TRDTCが空欄、それ以外の行はこれらが必須でTRORRES・TRMETHODは選択肢のいずれか
+  tmp_tr_7 %>%
+    filter(TRSTAT == "NOT DONE") %>%
+    check_blank_vars(c("TRORRES", "TRMETHOD", "TRDTC"), domain_name = str_c(label, "/NOT DONE"))
+  tmp_tr_7 %>%
+    filter(TRSTAT != "NOT DONE") %>%
+    check_required_vars(c("TRORRES", "TRMETHOD", "TRDTC"), domain_name = label)
+  target <- c("TRORRES", "TRMETHOD")
+  tmp_tr_7 %>%
+    filter(TRSTAT != "NOT DONE") %>%
+    rename_with(~ str_c(.x, suffix), all_of(target)) %>%
+    run_target_value_checks("TR")
+  tmp_tr_7 %>% check_date_before_today("TRDTC", domain_name = label)
+}
+
+
+
+
