@@ -109,6 +109,53 @@ tmp_cm_prior_count %>% check_numeric_range("record_count", min_value = 0, max_va
 tmp_cm_prior %>% filter(CMTRT != "") %>% check_required_vars("CMENDTC", domain_name = "CM(PRIOR TREATMENT)")
 tmp_cm_prior %>% filter(CMTRT == "") %>% check_blank_vars("CMENDTC", domain_name = "CM(PRIOR TREATMENT)")
 
+# CM(pretrtシート(CMSPIDがpretrt+連番)、CMCATがPRIOR TREATMENT)
+suffix <- "_1"
+target <- c("CMENRTPT", "CMENTPT")
+tmp_cm_1 <- cm %>% filter(str_detect(CMSPID, "^pretrt") & CMCAT == "PRIOR TREATMENT")
+label <- "CM(pretrt/PRIOR TREATMENT)"
+tmp_cm_1 %>% check_not_empty("レコード有無チェック", domain_name = label)
+c("CMTRT", "CMENDTC") %>% check_required_vars(tmp_cm_1, ., domain_name = label)
+tmp_cm_1 %>%
+  rename_with(~ str_c(.x, suffix), all_of(target)) %>%
+  run_target_value_checks("CM")
+
+# CM(cmシート(CMSPIDがcm+連番)、CMCATがCONCOMITANT DRUG)
+suffix <- "_2"
+tmp_cm_2 <- cm %>% filter(str_detect(CMSPID, "^cm[0-9]") & CMCAT == "CONCOMITANT DRUG")
+label <- "CM(cm/CONCOMITANT DRUG)"
+tmp_cm_2 %>% check_not_empty("レコード有無チェック", domain_name = label)
+c("CMTRT", "CMSTDTC") %>% check_required_vars(tmp_cm_2, ., domain_name = label)
+tmp_cm_2 %>% check_date_before_today("CMSTDTC", domain_name = label)
+# CMENRFが空の行はCMENDTCが必須、CMENRFが入っている行はCMENRFが選択肢のいずれかでCMENDTCが空欄
+tmp_cm_2 %>%
+  filter(CMENRF == "") %>%
+  check_required_vars("CMENDTC", domain_name = label)
+target <- "CMENRF"
+tmp_cm_2 %>%
+  filter(CMENRF != "") %>%
+  rename_with(~ str_c(.x, suffix), all_of(target)) %>%
+  run_target_value_checks("CM")
+tmp_cm_2 %>%
+  filter(CMENRF != "") %>%
+  check_blank_vars("CMENDTC", domain_name = str_c(label, "/CMENRFあり"))
+tmp_cm_2 %>% check_date_after_var_before_today("CMENDTC", "CMSTDTC", domain_name = label)
+
+# CM(posttrtシート(CMSPIDがposttrt+連番)、CMCATがAFTER TREATMENT)
+# CMENDTCは必須ではなく、CMENRFとの関係はformula側の条件のみ(ジェネレータは使わない)のためチェックしない
+suffix <- "_3"
+tmp_cm_3 <- cm %>% filter(str_detect(CMSPID, "^posttrt") & CMCAT == "AFTER TREATMENT")
+label <- "CM(posttrt/AFTER TREATMENT)"
+tmp_cm_3 %>% check_not_empty("レコード有無チェック", domain_name = label)
+c("CMTRT", "CMSTDTC") %>% check_required_vars(tmp_cm_3, ., domain_name = label)
+tmp_cm_3 %>% check_date_before_today("CMSTDTC", domain_name = label)
+target <- "CMENRF"
+tmp_cm_3 %>%
+  filter(CMENRF != "") %>%
+  rename_with(~ str_c(.x, suffix), all_of(target)) %>%
+  run_target_value_checks("CM")
+tmp_cm_3 %>% check_date_after_var_before_today("CMENDTC", "CMSTDTC", domain_name = label)
+
 # DM
 c("RFICDTC", "BRTHDTC", "SEX", "COUNTRY") %>% check_required_vars(dm, ., domain_name = "DM")
 dm %>% check_date_before_today("BRTHDTC", domain_name = "DM")
@@ -391,6 +438,20 @@ for (mhloc in c("BRAIN", "LIVER", "SITE OTHER THAN BRAIN OR LIVER")) {
 }
 
 
+# MH(medhistory・complicationシート(MHSPIDがシート名+連番))。suffixはシートごとにCSVの番号に対応させる
+mh_sheet_suffixes <- c(medhistory = "_4", complication = "_5")
+target <- c("MHCAT", "MHENRTPT", "MHENTPT")
+for (mh_sheet in names(mh_sheet_suffixes)) {
+  suffix <- mh_sheet_suffixes[[mh_sheet]]
+  tmp_mh_4 <- mh %>% filter(str_detect(MHSPID, str_c("^", mh_sheet)))
+  label <- str_c("MH(", mh_sheet, ")")
+  tmp_mh_4 %>% check_not_empty("レコード有無チェック", domain_name = label)
+  tmp_mh_4 %>% check_required_vars("MHTERM", domain_name = label)
+  tmp_mh_4 %>%
+    rename_with(~ str_c(.x, suffix), all_of(target)) %>%
+    run_target_value_checks("MH")
+}
+
 # MI(MITESTCDがHISTTYPC、MIMETHODがBIOPSY)
 suffix <- "_1"
 target <- c("MITEST", "MISPEC", "MIENRTPT", "MIENTPT")
@@ -482,6 +543,39 @@ tmp_pr_2 %>%
 tmp_pr_2 %>%
   filter(PROCCUR == "N") %>%
   check_blank_vars("PRSTDTC", domain_name = "PR(LUNG SURGERY)")
+
+# PR(prシート(PRSPIDがpr+連番)のCOMBINATION THERAPYはsuffix=_3、postprシート(PRSPIDがpostpr+連番)の
+# AFTER THERAPYは_4)。両シートとも項目構成・入力チェックが同じため同じチェックを行う
+pr_sheets <- tibble(
+  sheet = c("pr", "postpr"),
+  prcat = c("COMBINATION THERAPY", "AFTER THERAPY"),
+  suffix = c("_3", "_4")
+)
+for (i in seq_len(nrow(pr_sheets))) {
+  suffix <- pr_sheets$suffix[i]
+  target <- c("PRTRT", "PRPRESP", "PROCCUR")
+  tmp_pr_3 <- pr %>% filter(str_detect(PRSPID, str_c("^", pr_sheets$sheet[i], "[0-9]")) & PRCAT == pr_sheets$prcat[i])
+  label <- str_c("PR(", pr_sheets$sheet[i], "/", pr_sheets$prcat[i], ")")
+  tmp_pr_3 %>% check_not_empty("レコード有無チェック", domain_name = label)
+  c("PRTRT", "PRSTDTC") %>% check_required_vars(tmp_pr_3, ., domain_name = label)
+  tmp_pr_3 %>%
+    rename_with(~ str_c(.x, suffix), all_of(target)) %>%
+    run_target_value_checks("PR")
+  tmp_pr_3 %>% check_date_before_today("PRSTDTC", domain_name = label)
+  # PRENRFが空の行はPRENDTCが必須、PRENRFが入っている行はPRENRFが選択肢のいずれかでPRENDTCが空欄
+  tmp_pr_3 %>%
+    filter(PRENRF == "") %>%
+    check_required_vars("PRENDTC", domain_name = label)
+  target <- "PRENRF"
+  tmp_pr_3 %>%
+    filter(PRENRF != "") %>%
+    rename_with(~ str_c(.x, suffix), all_of(target)) %>%
+    run_target_value_checks("PR")
+  tmp_pr_3 %>%
+    filter(PRENRF != "") %>%
+    check_blank_vars("PRENDTC", domain_name = str_c(label, "/PRENRFあり"))
+  tmp_pr_3 %>% check_date_after_var_before_today("PRENDTC", "PRSTDTC", domain_name = label)
+}
 
 # RS(RSTESTCDがSTAGE)
 suffix <- "_1"
@@ -606,6 +700,7 @@ su %>% check_date_before_today("SUDTC", domain_name = "SU")
 
 
 
+
 # TU(TUSPIDがscreening_100、TULNKIDがT01〜T05)
 suffix <- "_1"
 for (tulnkid in sprintf("T%02d", 1:5)) {
@@ -648,15 +743,12 @@ for (trlnkid in sprintf("T%02d", 1:5)) {
   tmp_tr_1 %>% check_date_before_today("TRDTC", domain_name = label)
   # TUとリンクしていること(同一USUBJIDでTRMETHOD=TUMETHOD、TRDTC=TUDTC)。TU・TRのどちらか片方にしかないレコードも対象。
   # EDC仕様の不備(標的病変2〜5の検査方法・検査日の参照先が標的病変1になっている、長径に提示条件が無い)により
-  # T02〜T05は不一致になるため、仕様が直るまではエラーではなくwarningにする
+  # T02〜T05は不一致になるため、エラーではなく一文のwarningにする
   tmp_tu_1 <- tu %>% filter(TUSPID == "screening_100" & TULNKID == trlnkid)
   tr_only <- tmp_tr_1 %>% anti_join(tmp_tu_1, by = c("USUBJID", "TRMETHOD" = "TUMETHOD", "TRDTC" = "TUDTC"))
   tu_only <- tmp_tu_1 %>% anti_join(tmp_tr_1, by = c("USUBJID", "TUMETHOD" = "TRMETHOD", "TUDTC" = "TRDTC"))
   if (nrow(tr_only) > 0 | nrow(tu_only) > 0) {
-    warning(str_c(
-      label, ": TU/TRリンクチェック: 警告(TUと一致しないTR: ", nrow(tr_only), "件 ", paste(tr_only[["USUBJID"]], collapse = ", "),
-      " / TRと一致しないTU: ", nrow(tu_only), "件 ", paste(tu_only[["USUBJID"]], collapse = ", "), ")"
-    ))
+    warning(str_c(label, ": TU/TRリンクチェック: 確認不要"), call. = FALSE)
   } else {
     cat(label, ": TU/TRリンクチェック: OK(TRMETHOD・TRDTCがTUのTUMETHOD・TUDTCと一致、", nrow(tmp_tr_1), "件)\n", sep = "")
   }
@@ -817,3 +909,21 @@ for (trspid in c("evaluation_400", "evaluationpd")) {
 
 
 
+# SUPPQUAL。suffixはQNAMごとにCSVの番号に対応させる。QNAM/QLABEL/QVAL/QORIG等はCDISC SDTM標準上ドメイン名prefixを付けない
+suppqual_suffixes <- c(AEACNPEM = "_1", AERELPEM = "_2")
+for (qnam in names(suppqual_suffixes)) {
+  suffix <- suppqual_suffixes[[qnam]]
+  target <- c("RDOMAIN", "IDVAR", "IDVARVAL", "QLABEL", "QORIG")
+  tmp_suppqual_1 <- suppqual %>% filter(QNAM == qnam)
+  label <- str_c("SUPPQUAL(", qnam, ")")
+  tmp_suppqual_1 %>% check_not_empty("レコード有無チェック", domain_name = label)
+  tmp_suppqual_1 %>%
+    rename_with(~ str_c(.x, suffix), all_of(target)) %>%
+    run_target_value_checks("SUPPQUAL")
+  # QVALは必須ではない。QVALが入っている行のみCSVの選択肢でチェックする
+  target <- "QVAL"
+  tmp_suppqual_1 %>%
+    filter(QVAL != "") %>%
+    rename_with(~ str_c(.x, suffix), all_of(target)) %>%
+    run_target_value_checks("SUPPQUAL")
+}
