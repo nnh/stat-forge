@@ -527,9 +527,8 @@ function resolveDateRefBoundVals(data, dateRefBounds, varName, boundTypeVal, exi
   const result = new Array(data.length).fill(null);
   boundRows.forEach((br) => {
     const refVar = br.ref_cdisc_variable;
-    // ref('sheet_alias', N)+N.days/-N.daysの符号付き日数オフセット(extractDateCrossRefOffsetDays()由来。
-    // 無指定ならnull=0として扱う)
-    const offsetDays = br.offset_days != null ? br.offset_days : 0;
+    // 参照先の値に加えるずれ(offset_months/offset_days。extractDateRefOffset()由来。無指定ならnull=0として扱う)
+    const hasOffset = !!(br.offset_days || br.offset_months);
     const ownAlias = br.alias_name != null ? br.alias_name : null;
     const ownLabel = br.label != null ? br.label : null;
     const refAlias = br.ref_alias_name != null ? br.ref_alias_name : null;
@@ -569,8 +568,8 @@ function resolveDateRefBoundVals(data, dateRefBounds, varName, boundTypeVal, exi
     } else {
       values = data.map((row) => row[refVar]);
     }
-    if (offsetDays !== 0) {
-      values = values.map((v) => (v != null ? addDaysToDateString(v, offsetDays) : v));
+    if (hasOffset) {
+      values = values.map((v) => applyDateRefOffset(v, br));
     }
 
     data.forEach((row, i) => {
@@ -880,10 +879,14 @@ function clampDatesToDiscontinuation(data, dateVars, registrationStartDate, disc
         const current = row[varName];
         if (current == null) return;
         const disconOver = discon != null && current > discon;
+        // 今日より後(未来日)の値も再サンプル対象にする。オフセット付き参照(例: "f293+1.days")が連鎖して
+        // 参照先の値+オフセットが今日を超えると、生成時(regenerateDateChain()等)に上限を下限に合わせるため
+        // 未来日が入ってしまう。下の「有効な日付範囲が存在しない場合」の処理で未入力(null)に戻す
+        const todayOver = current > today;
         const minVal = minRefVals != null ? minRefVals[i] : null;
         const maxVal = maxRefVals != null ? maxRefVals[i] : null;
         const refViolation = (minVal != null && current < minVal) || (maxVal != null && current > maxVal);
-        if (!disconOver && !refViolation) return;
+        if (!disconOver && !todayOver && !refViolation) return;
 
         let lower = registrationStartDate;
         // RFSTDTC(症例登録日)は、この変数に明示的なmin_date参照(minVal)が無い場合のデフォルト下限としてのみ
@@ -1073,7 +1076,7 @@ function regenerateDateChain(data, aliasNameVal, dateRefBounds, chainVars, regis
       if (minRow == null && row.RFSTDTC != null && row.RFSTDTC > lower) lower = row.RFSTDTC;
       if (minRow != null) {
         let refVal = refValueFor(row, minRow.ref_label, minRow.ref_cdisc_variable);
-        if (refVal != null && minRow.offset_days) refVal = addDaysToDateString(refVal, minRow.offset_days);
+        if (refVal != null) refVal = applyDateRefOffset(refVal, minRow);
         if (refVal != null && refVal > lower) lower = refVal;
       }
       // BRTHDTC(生年月日)は、明示的なref()参照の有無によらず常に守るべき生物学的な下限のため、
@@ -1087,7 +1090,7 @@ function regenerateDateChain(data, aliasNameVal, dateRefBounds, chainVars, regis
       if (discon != null && discon < upper) upper = discon;
       if (maxRow != null) {
         let refVal = refValueFor(row, maxRow.ref_label, maxRow.ref_cdisc_variable);
-        if (refVal != null && maxRow.offset_days) refVal = addDaysToDateString(refVal, maxRow.offset_days);
+        if (refVal != null) refVal = applyDateRefOffset(refVal, maxRow);
         if (refVal != null && refVal < upper) upper = refVal;
       }
       if (upper < lower) upper = lower;
@@ -1513,10 +1516,9 @@ function buildRepeatedDomain(dm, spec, prefix, registrationStartDate, meddraData
           // 明示的なmin_date参照(dateMinRow)があっても、labelを跨ぐ連鎖等で行によっては参照先の値が
           // まだ無い(例: EC複数回投与の1回目=連鎖の先頭)ことがある。そのような行にだけRFSTDTCを
           // デフォルト下限として補う(参照値がある行では、その変数本来の意味を尊重してRFSTDTCは加えない)。
-          // ref('sheet_alias', N)+N.days/-N.daysの符号付き日数オフセット(dateMinRow.offset_days。
-          // 無指定ならnull=0として扱う)を参照先の値に加味する
+          // 参照先の値に加えるずれ(dateMinRow.offset_months/offset_days。無指定ならnull=0として扱う)を加味する
           const rawMinRefVal = dateMinRow != null ? row[dateMinRow.ref_cdisc_variable] : null;
-          const refVal = rawMinRefVal != null && dateMinRow.offset_days ? addDaysToDateString(rawMinRefVal, dateMinRow.offset_days) : rawMinRefVal;
+          const refVal = applyDateRefOffset(rawMinRefVal, dateMinRow);
           if (refVal == null && row.RFSTDTC != null && row.RFSTDTC > lower) lower = row.RFSTDTC;
           if (refVal != null && refVal > lower) {
             lower = refVal;
@@ -1527,7 +1529,7 @@ function buildRepeatedDomain(dm, spec, prefix, registrationStartDate, meddraData
           if (row.BRTHDTC != null && row.BRTHDTC > lower) lower = row.BRTHDTC;
           let upper = today;
           const rawMaxRefVal = dateMaxRow != null ? row[dateMaxRow.ref_cdisc_variable] : null;
-          const maxRefVal = rawMaxRefVal != null && dateMaxRow.offset_days ? addDaysToDateString(rawMaxRefVal, dateMaxRow.offset_days) : rawMaxRefVal;
+          const maxRefVal = applyDateRefOffset(rawMaxRefVal, dateMaxRow);
           if (maxRefVal != null && maxRefVal < upper) {
             upper = maxRefVal;
           }

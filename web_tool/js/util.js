@@ -344,11 +344,32 @@ function randomDateBetween(startDateStr, endDateStr) {
   return new Date(randomDay * oneDay).toISOString().slice(0, 10);
 }
 
-// dateStr(YYYY-MM-DD)にdays日(負数可)を加算した日付文字列を返す。
-// ref('sheet_alias', N)+150.days/-28.daysのような符号付き日数オフセットの適用に使う
+// dateStr(YYYY-MM-DD)にdays日(負数可)を加算した日付文字列を返す
 function addDaysToDateString(dateStr, days) {
   const oneDay = 24 * 60 * 60 * 1000;
   return new Date(new Date(dateStr).getTime() + days * oneDay).toISOString().slice(0, 10);
+}
+
+// dateStr(YYYY-MM-DD)にmonthsか月(負数可)を加算した日付文字列を返す。加算後の月にその日が存在しない場合は
+// その月の末日にする(EDCの日付計算(Ruby on Rails)と同じ扱い。例: 1/31 + 1か月 = 2/28(うるう年は2/29))
+function addMonthsToDateString(dateStr, months) {
+  const d = new Date(dateStr);
+  const totalMonths = d.getUTCFullYear() * 12 + d.getUTCMonth() + months;
+  const year = Math.floor(totalMonths / 12);
+  const month = totalMonths - year * 12;
+  const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+  const day = Math.min(d.getUTCDate(), lastDay);
+  return new Date(Date.UTC(year, month, day)).toISOString().slice(0, 10);
+}
+
+// 日付の範囲の参照先の値(dateStr)に、dateRefBounds行のずれ(offset_months/offset_days。どちらもnullなら0)を
+// 加えた日付文字列を返す。月数を先に、日数を後に適用する(Railsの日付計算と同じ順序)
+function applyDateRefOffset(dateStr, boundRow) {
+  if (dateStr == null || boundRow == null) return dateStr;
+  let result = dateStr;
+  if (boundRow.offset_months) result = addMonthsToDateString(result, boundRow.offset_months);
+  if (boundRow.offset_days) result = addDaysToDateString(result, boundRow.offset_days);
+  return result;
 }
 
 // tibble的な行オブジェクトの配列をCSV文字列に変換する。
