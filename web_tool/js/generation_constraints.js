@@ -163,32 +163,48 @@ function computeFormulaFieldRef(validatorType, validatorKey, value) {
   return { refField: `field${m[3]}`, boundType: boundTypeFromOperator(m[2]) };
 }
 
-// age(f2, f3)>=20 && age(f2, f3)<=80のような年齢条件を解釈する
-const AGE_CONDITION_RE = /^age\(\s*f([0-9]+)\s*,\s*f([0-9]+)\s*\)\s*(>=|<=)\s*([0-9]+(?:\.[0-9]+)?)$/;
+// age(...)(年齢)と同じ書式のage_m(...)(月齢)は、月数を12で割って年に換算して扱う
+// (以降の処理は年齢と同じく日数/365.25の近似で計算する)。換算前の単位はage_unit("year"/"month")として保持する
+const MONTHS_PER_YEAR = 12;
+function ageUnitFromSuffix(monthSuffix) {
+  return monthSuffix ? "month" : "year";
+}
+function toAgeYears(value, ageUnit) {
+  return ageUnit === "month" ? value / MONTHS_PER_YEAR : value;
+}
+
+// age(f2, f3)>=20 && age(f2, f3)<=80のような年齢条件を解釈する。age_m(...)(月齢)も同じ書式で受け付ける
+// (ageとage_mが混在する場合は非対応(null))
+const AGE_CONDITION_RE = /^age(_m)?\(\s*f([0-9]+)\s*,\s*f([0-9]+)\s*\)\s*(>=|<=)\s*([0-9]+(?:\.[0-9]+)?)$/;
 function parseAgeCondition(value) {
   const clauses = value.split("&&").map((s) => s.trim());
   const matches = clauses.map((c) => c.match(AGE_CONDITION_RE));
   if (matches.some((m) => m === null)) return null;
-  const fieldPairs = [...new Set(matches.map((m) => `${m[1]}-${m[2]}`))];
+  const ageUnits = [...new Set(matches.map((m) => ageUnitFromSuffix(m[1])))];
+  if (ageUnits.length !== 1) return null;
+  const ageUnit = ageUnits[0];
+  const fieldPairs = [...new Set(matches.map((m) => `${m[2]}-${m[3]}`))];
   if (fieldPairs.length !== 1) return null;
-  const geClause = matches.find((m) => m[3] === ">=");
-  const leClause = matches.find((m) => m[3] === "<=");
+  const geClause = matches.find((m) => m[4] === ">=");
+  const leClause = matches.find((m) => m[4] === "<=");
   return {
-    field1: `field${matches[0][1]}`,
-    field2: `field${matches[0][2]}`,
-    minAge: geClause ? Number(geClause[4]) : null,
-    maxAge: leClause ? Number(leClause[4]) : null,
+    field1: `field${matches[0][2]}`,
+    field2: `field${matches[0][3]}`,
+    minAge: geClause ? toAgeYears(Number(geClause[5]), ageUnit) : null,
+    maxAge: leClause ? toAgeYears(Number(leClause[5]), ageUnit) : null,
+    ageUnit,
   };
 }
 function extractAgeCondition(fieldName, validatorKey, value) {
-  if (validatorKey !== "validate_formula_if" || value == null) return { ageRefField: null, minAge: null, maxAge: null };
+  const none = { ageRefField: null, minAge: null, maxAge: null, ageUnit: null };
+  if (validatorKey !== "validate_formula_if" || value == null) return none;
   const parsed = parseAgeCondition(value);
-  if (!parsed) return { ageRefField: null, minAge: null, maxAge: null };
+  if (!parsed) return none;
   let otherField = null;
   if (parsed.field1 === fieldName) otherField = parsed.field2;
   else if (parsed.field2 === fieldName) otherField = parsed.field1;
-  if (!otherField) return { ageRefField: null, minAge: null, maxAge: null };
-  return { ageRefField: otherField, minAge: parsed.minAge, maxAge: parsed.maxAge };
+  if (!otherField) return none;
+  return { ageRefField: otherField, minAge: parsed.minAge, maxAge: parsed.maxAge, ageUnit: parsed.ageUnit };
 }
 
 // age(ref('sheet1', N1), ref('sheet2', N2)) OP 閾値 のような、別シートの2つの日付フィールドの
@@ -196,18 +212,19 @@ function extractAgeCondition(fieldName, validatorKey, value) {
 // 上記のage(fN, fM)(同一シート内、フィールド自身の値をageBoundsで直接束縛する用途)とは別に、
 // ref('sheet', N)形式(別シート参照、フィールド自身とは無関係な2つの日付の年齢差で提示可否を
 // ゲーティングする用途。例: FASTATがage(初発診断日, 生年月日)>39のときだけ提示される)を扱う。
-// &&で他条件と組み合わさっている場合は非対応(null)(Rのparse_age_ref_condition()に対応)
-const AGE_REF_CONDITION_RE = /^\(?\s*age\(\s*ref\('([^']+)'\s*,\s*([0-9]+)\)\s*,\s*ref\('([^']+)'\s*,\s*([0-9]+)\)\)\s*(>=|<=|>|<)\s*([0-9]+(?:\.[0-9]+)?)\s*\)?$/;
+// &&で他条件と組み合わさっている場合は非対応(null)(Rのparse_age_ref_condition()に対応)。
+// age_m(...)(月齢)も同じ書式で受け付け、閾値を年に換算する
+const AGE_REF_CONDITION_RE = /^\(?\s*age(_m)?\(\s*ref\('([^']+)'\s*,\s*([0-9]+)\)\s*,\s*ref\('([^']+)'\s*,\s*([0-9]+)\)\)\s*(>=|<=|>|<)\s*([0-9]+(?:\.[0-9]+)?)\s*\)?$/;
 function parseAgeRefCondition(value) {
   const m = value.match(AGE_REF_CONDITION_RE);
   if (!m) return null;
   return {
-    ref1AliasName: m[1],
-    ref1Field: `field${m[2]}`,
-    ref2AliasName: m[3],
-    ref2Field: `field${m[4]}`,
-    operator: m[5],
-    threshold: Number(m[6]),
+    ref1AliasName: m[2],
+    ref1Field: `field${m[3]}`,
+    ref2AliasName: m[4],
+    ref2Field: `field${m[5]}`,
+    operator: m[6],
+    threshold: toAgeYears(Number(m[7]), ageUnitFromSuffix(m[1])),
   };
 }
 
@@ -221,19 +238,20 @@ function parseAgeRefOrCondition(value) {
   if (clauses.length !== 2) return null;
   const parsed = clauses.map((c) => c.match(AGE_REF_CONDITION_RE));
   if (parsed.some((m) => !m)) return null;
-  const refPairs = parsed.map((m) => `${m[1]}-${m[2]}-${m[3]}-${m[4]}`);
+  // 2つの断片は同じ単位(ageとage_mの混在は非対応)・同じref1/ref2であること
+  const refPairs = parsed.map((m) => `${ageUnitFromSuffix(m[1])}-${m[2]}-${m[3]}-${m[4]}-${m[5]}`);
   if (refPairs[0] !== refPairs[1]) return null;
-  const operators = parsed.map((m) => m[5]);
-  const thresholds = parsed.map((m) => Number(m[6]));
+  const operators = parsed.map((m) => m[6]);
+  const thresholds = parsed.map((m) => toAgeYears(Number(m[7]), ageUnitFromSuffix(m[1])));
   const lowerIdx = operators.findIndex((op) => op === "<" || op === "<=");
   const upperIdx = operators.findIndex((op) => op === ">" || op === ">=");
   if (lowerIdx === -1 || upperIdx === -1 || lowerIdx === upperIdx) return null;
   const m0 = parsed[0];
   return {
-    ref1AliasName: m0[1],
-    ref1Field: `field${m0[2]}`,
-    ref2AliasName: m0[3],
-    ref2Field: `field${m0[4]}`,
+    ref1AliasName: m0[2],
+    ref1Field: `field${m0[3]}`,
+    ref2AliasName: m0[4],
+    ref2Field: `field${m0[5]}`,
     minAge: thresholds[lowerIdx],
     maxAge: thresholds[upperIdx],
   };
@@ -353,6 +371,7 @@ function buildValidatorTable(sheets) {
       age_ref_field: age.ageRefField,
       min_age: age.minAge,
       max_age: age.maxAge,
+      age_unit: age.ageUnit,
     };
   });
 }
@@ -919,7 +938,7 @@ function buildAgeBounds(validatorTable, fieldLookup) {
   const seen = new Set();
   validatorTable.forEach((vr) => {
     if (vr.age_ref_field == null) return;
-    const key = `${vr.alias_name}|${vr.field_name}|${vr.age_ref_field}|${vr.min_age}|${vr.max_age}`;
+    const key = `${vr.alias_name}|${vr.field_name}|${vr.age_ref_field}|${vr.min_age}|${vr.max_age}|${vr.age_unit}`;
     if (seen.has(key)) return;
     seen.add(key);
     const ownMatches = lookupField(fieldLookup, vr.alias_name, vr.field_name);
@@ -937,6 +956,9 @@ function buildAgeBounds(validatorTable, fieldLookup) {
           ref_label: ref.label != null ? ref.label : null,
           min_age: vr.min_age,
           max_age: vr.max_age,
+          // min_age/max_ageは年に換算済み。age_unitは元の単位(age_mなら"month")で、
+          // 生年月日の生成範囲の上限(computeBirthAgeRange)で使う
+          age_unit: vr.age_unit,
         });
       });
     });
