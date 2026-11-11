@@ -46,49 +46,64 @@ function extractNumericValue(validatorType, value) {
   return Number.isNaN(n) ? null : n;
 }
 
-// "field3"のような同一シート内の別フィールド参照、または"f84 +1.day"のような日数オフセット付きの
-// 同一シート内参照(EDC仕様上25箇所で使用、いずれも"+1.day(s)"のみ)の場合、参照先フィールド名を
-// 取り出す。日数オフセット自体は下限として厳密には反映しない(populateDateFields等はref_field自身の
-// 値をそのまま下限にする。+1日分だけ緩い下限になるが、参照が完全に無視されるよりは実態に即しており、
-// この差はcheckDateAfterVarBeforeToday等の>=判定には影響しない)
-function extractRefField(validatorType, value) {
+// 日付の範囲の入力チェック(validate_date_after_or_equal_to/validate_date_before_or_equal_to)の値を解釈する。
+// 参照先は同一シート内のフィールド("field3"/"f3")、または他シート参照("ref('sheet_alias', N)")で、
+// その後ろに"±(数値).day(s)/week(s)/month(s)/year(s)"のずれを任意の個数続けられる
+// (例: "f5 + 2.weeks"、"ref('sheet_alias', N) - 28.days"、"field5 + 1.year + 1.week")。
+// ずれは日数(weekは7日)と月数(yearは12か月)に分けて保持し、参照先の値に加える際は
+// addDateOffsetToDateString()で月数を先に、日数を後に適用する(Rのextract_date_cross_ref_alias/
+// extract_date_cross_ref_fieldに対応。R版はdaysのみ対応)
+const DATE_REF_BASE_RE = /^\s*(?:ref\('([^']+)'\s*,\s*([0-9]+)\)|(?:field|f)([0-9]+))/;
+const DATE_REF_OFFSET_TERM_RE = /^\s*([+-])\s*([0-9]+)\s*\.\s*(days?|weeks?|months?|years?)/;
+function parseDateRefExpression(validatorType, value) {
   if (validatorType !== "date" || value == null) return null;
-  if (/^field[0-9]+$/.test(value)) return value;
-  if (/^f[0-9]+$/.test(value)) return `field${value.slice(1)}`;
-  const m = value.match(/^f([0-9]+)\s*\+\s*[0-9]+\.days?$/);
-  if (m) return `field${m[1]}`;
-  return null;
+  const base = value.match(DATE_REF_BASE_RE);
+  if (!base) return null;
+  let rest = value.slice(base[0].length);
+  let offsetDays = null;
+  let offsetMonths = null;
+  for (;;) {
+    const term = rest.match(DATE_REF_OFFSET_TERM_RE);
+    if (!term) break;
+    const n = (term[1] === "-" ? -1 : 1) * Number(term[2]);
+    const unit = term[3];
+    if (unit.startsWith("day")) offsetDays = (offsetDays || 0) + n;
+    else if (unit.startsWith("week")) offsetDays = (offsetDays || 0) + n * 7;
+    else if (unit.startsWith("month")) offsetMonths = (offsetMonths || 0) + n;
+    else offsetMonths = (offsetMonths || 0) + n * 12;
+    rest = rest.slice(term[0].length);
+  }
+  if (rest.trim() !== "") return null;
+  const isCrossRef = base[1] != null;
+  return {
+    aliasName: isCrossRef ? base[1] : null,
+    field: `field${isCrossRef ? base[2] : base[3]}`,
+    offsetDays,
+    offsetMonths,
+  };
 }
 
-// valueが"ref('sheet_alias', N)"のような他シート参照の場合(date型バリデータの
-// validate_date_after_or_equal_to/validate_date_before_or_equal_toで使われる形。presence/formula側の
-// ref('sheet_alias', N)=='値'とは異なり、値の比較を伴わない単独のref()呼び出し)、参照先のシート
-// (alias_name)とフィールド名を取り出す(Rのextract_date_cross_ref_alias/extract_date_cross_ref_fieldに対応)。
-// "ref('maitenance',829)-28.days"のような日数オフセット付きの他シート参照(EDC仕様上使用例あり)にも
-// 対応する。オフセット(符号+日数)はextractDateCrossRefOffsetDays()で取り出し、
-// buildGenerationConstraints()のdateRefBoundsに反映する(参照先フィールドの値にオフセットを
-// 加減した値を下限/上限として使う)
-const DATE_CROSS_REF_PATTERN = /^\s*ref\('([^']+)'\s*,\s*([0-9]+)\)\s*(?:([+-])\s*([0-9]+)\.days?)?\s*$/;
+// 同一シート内の別フィールド参照(ずれ付きを含む)の場合、参照先フィールド名を取り出す
+function extractRefField(validatorType, value) {
+  const parsed = parseDateRefExpression(validatorType, value);
+  return parsed && parsed.aliasName == null ? parsed.field : null;
+}
 
+// 他シート参照(ずれ付きを含む)の場合、参照先のシート(alias_name)とフィールド名を取り出す
 function extractDateCrossRefAlias(validatorType, value) {
-  if (validatorType !== "date" || value == null) return null;
-  const m = value.match(DATE_CROSS_REF_PATTERN);
-  return m ? m[1] : null;
+  const parsed = parseDateRefExpression(validatorType, value);
+  return parsed ? parsed.aliasName : null;
 }
 
 function extractDateCrossRefField(validatorType, value) {
-  if (validatorType !== "date" || value == null) return null;
-  const m = value.match(DATE_CROSS_REF_PATTERN);
-  return m ? `field${m[2]}` : null;
+  const parsed = parseDateRefExpression(validatorType, value);
+  return parsed && parsed.aliasName != null ? parsed.field : null;
 }
 
-// ref('sheet_alias', N)+150.days / ref('sheet_alias', N)-28.daysの符号付き日数オフセットを
-// 数値(例: 150, -28)で取り出す。オフセットが無い場合はnull
-function extractDateCrossRefOffsetDays(validatorType, value) {
-  if (validatorType !== "date" || value == null) return null;
-  const m = value.match(DATE_CROSS_REF_PATTERN);
-  if (!m || m[4] == null) return null;
-  return (m[3] === "-" ? -1 : 1) * Number(m[4]);
+// 参照先の値に加えるずれ(日数・月数)を取り出す。無い場合はそれぞれnull
+function extractDateRefOffset(validatorType, value) {
+  const parsed = parseDateRefExpression(validatorType, value);
+  return parsed ? { days: parsed.offsetDays, months: parsed.offsetMonths } : { days: null, months: null };
 }
 
 // value(例: field2=='ADVERSE EVENT'、f4=='Y' || f4=='N'、field6=="Y")を"||"で分割し、
@@ -350,7 +365,7 @@ function buildValidatorTable(sheets) {
     const boundType = classifyBoundType(validatorType, validatorKey) ?? formulaSingle.boundType ?? formulaFieldRef.boundType;
     const refField = extractRefField(validatorType, value) ?? extractDateCrossRefField(validatorType, value) ?? formulaSingle.refField ?? formulaFieldRef.refField;
     const dateRefAliasName = extractDateCrossRefAlias(validatorType, value);
-    const dateRefOffsetDays = extractDateCrossRefOffsetDays(validatorType, value);
+    const dateRefOffset = extractDateRefOffset(validatorType, value);
     const numericValue = extractNumericValue(validatorType, value) ?? formulaSingle.boundValue ?? null;
 
     const presence = computePresenceRefFieldAndValue(validatorType, validatorKey, value);
@@ -362,7 +377,8 @@ function buildValidatorTable(sheets) {
       bound_type: boundType,
       ref_field: refField,
       date_ref_alias_name: dateRefAliasName,
-      date_ref_offset_days: dateRefOffsetDays,
+      date_ref_offset_days: dateRefOffset.days,
+      date_ref_offset_months: dateRefOffset.months,
       numeric_value: numericValue,
       presence_ref_field: presence.field,
       presence_ref_value: presence.value,
@@ -925,6 +941,7 @@ function buildDateRefBounds(validatorTable, fieldLookup) {
           ref_cdisc_variable: ref.cdisc_variable,
           bound_type: vr.bound_type,
           offset_days: vr.date_ref_offset_days,
+          offset_months: vr.date_ref_offset_months,
         });
       });
     });

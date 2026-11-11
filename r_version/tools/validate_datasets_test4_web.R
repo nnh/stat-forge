@@ -902,3 +902,107 @@ tmp_vs <- tmp_vs %>% rename_with(~ str_c(.x, suffix), all_of(target_vs_cols))
 str_c(target_vs_cols, suffix) %>%
   walk(~ run_value_equals_checks_from_csv(tmp_vs, "VS", .x, fixed_value_checks_csv_path))
 
+
+# EC(ENDTCを持つ7シート)。JSONのvalidators.dateから日付チェックを取得して確認する。
+# 同じブロック(cdisc_sheet_configsのlabel)内の別フィールドを下限に参照するもの(投与開始日<=投与終了日)と、
+# Date.current(今日)以前のものを対象にする。別ブロックを参照するもの(前回の投与終了日<=次回の投与開始日等)は、
+# 生成データ上でレコードとブロックを対応付けられないため対象外
+ec_date_sheets <- c("induction2_300", "induction3_500", "consoli1_800", "consoli1_1000", "consoli1_1200", "consoli2_1400", "quizartinib")
+edc_spec_json <- jsonlite::read_json(json_path)
+for (ec_sheet in ec_date_sheets) {
+  sheet <- keep(edc_spec_json$sheets, ~ .x$alias_name == ec_sheet)[[1]]
+  # EC項目のフィールド名 -> (cdisc_variable, ブロックのlabel)
+  ec_field_map <- sheet$cdisc_sheet_configs %>%
+    keep(~ .x$prefix == "EC") %>%
+    map_dfr(function(config) {
+      tibble(
+        field = names(config$table),
+        cdisc_variable = str_c("EC", map_chr(config$table, ~ if (is.null(.x)) NA_character_ else as.character(.x))),
+        block_label = if (is.null(config$label)) "" else config$label
+      )
+    })
+  # EC項目のvalidators.date(バリデータの種類と値)
+  ec_date_rules <- sheet$field_items %>%
+    keep(~ .x$name %in% ec_field_map$field && !is.null(.x$validators$date)) %>%
+    map_dfr(function(item) {
+      imap_dfr(item$validators$date, ~ tibble(field = item$name, validator_key = .y, value = as.character(.x)))
+    }) %>%
+    left_join(ec_field_map, by = "field") %>%
+    mutate(ref_field = str_c("field", str_match(value, "^\\s*(?:field|f)([0-9]+)\\s*$")[, 2])) %>%
+    left_join(
+      ec_field_map %>% rename(ref_field = field, ref_cdisc_variable = cdisc_variable, ref_block_label = block_label),
+      by = "ref_field"
+    )
+  ec_today_rules <- ec_date_rules %>%
+    filter(validator_key == "validate_date_before_or_equal_to" & value == "Date.current")
+  ec_same_block_rules <- ec_date_rules %>%
+    filter(validator_key == "validate_date_after_or_equal_to" & !is.na(ref_cdisc_variable) & block_label == ref_block_label)
+
+  tmp_ec <- ec %>% filter(str_detect(ECSPID, str_c("^", ec_sheet, "[0-9]*$")))
+  ec_label <- str_c("EC(", ec_sheet, ")")
+  tmp_ec %>% check_not_empty("レコード有無チェック", domain_name = ec_label)
+  ec_today_rules %>%
+    distinct(cdisc_variable) %>%
+    pull(cdisc_variable) %>%
+    walk(~ check_date_before_today(tmp_ec, .x, domain_name = ec_label))
+  ec_same_block_rules %>%
+    distinct(cdisc_variable, ref_cdisc_variable) %>%
+    pwalk(function(cdisc_variable, ref_cdisc_variable) {
+      check_date_after_var_before_today(tmp_ec, cdisc_variable, ref_cdisc_variable, domain_name = ec_label)
+    })
+  ec_skipped_n <- nrow(ec_date_rules) - nrow(ec_today_rules) - nrow(ec_same_block_rules)
+  cat(ec_label, ": 対象外の日付チェック(別ブロック参照等): ", ec_skipped_n, "件\n", sep = "")
+}
+
+# EC(同じシート内で別ブロックを参照する日付チェック)。JSONのvalidators.dateで、投与開始日(ECSTDTC)の下限に
+# 別ブロック(cdisc_sheet_configsのlabelが異なる)の投与終了日(ECENDTC)を参照しているシートについて、
+# 同じ被験者・同じECTRTのレコードを投与開始日順に並べ、各レコードの投与開始日が1つ前のレコードの
+# 投与終了日以降であることを確認する(1シートに別薬剤のブロックが混在するためECTRTごとに並べる)。
+# 別ブロックの投与開始日を参照するもの(ECSTDTC同士)は、投与開始日順に並べると必ず満たされるため対象外
+for (sheet in edc_spec_json$sheets) {
+  ec_configs <- keep(sheet$cdisc_sheet_configs, ~ .x$prefix == "EC")
+  if (length(ec_configs) == 0) next
+  ec_field_map <- ec_configs %>%
+    map_dfr(function(config) {
+      tibble(
+        field = names(config$table),
+        cdisc_variable = str_c("EC", map_chr(config$table, ~ if (is.null(.x)) NA_character_ else as.character(.x))),
+        block_label = if (is.null(config$label)) "" else config$label
+      )
+    })
+  ec_cross_block_rules <- sheet$field_items %>%
+    keep(~ .x$name %in% ec_field_map$field && !is.null(.x$validators$date)) %>%
+    map_dfr(function(item) {
+      imap_dfr(item$validators$date, ~ tibble(field = item$name, validator_key = .y, value = as.character(.x)))
+    }) %>%
+    left_join(ec_field_map, by = "field") %>%
+    mutate(ref_field = str_c("field", str_match(value, "^\\s*(?:field|f)([0-9]+)\\s*$")[, 2])) %>%
+    left_join(
+      ec_field_map %>% rename(ref_field = field, ref_cdisc_variable = cdisc_variable, ref_block_label = block_label),
+      by = "ref_field"
+    ) %>%
+    filter(
+      validator_key == "validate_date_after_or_equal_to" & cdisc_variable == "ECSTDTC" &
+        ref_cdisc_variable == "ECENDTC" & block_label != ref_block_label
+    )
+  if (nrow(ec_cross_block_rules) == 0) next
+
+  ec_sheet <- sheet$alias_name
+  ec_label <- str_c("EC(", ec_sheet, ")")
+  tmp_ec <- ec %>%
+    filter(str_detect(ECSPID, str_c("^", ec_sheet, "[0-9]*$")) & ECSTDTC != "") %>%
+    arrange(USUBJID, ECTRT, ECSTDTC, ECENDTC) %>%
+    group_by(USUBJID, ECTRT) %>%
+    mutate(prev_ECENDTC = lag(ECENDTC)) %>%
+    ungroup() %>%
+    filter(!is.na(prev_ECENDTC) & prev_ECENDTC != "")
+  tmp_ec_ng <- tmp_ec %>% filter(as.Date(ECSTDTC) < as.Date(prev_ECENDTC))
+  # ジェネレータがブロックを跨ぐ日付の連鎖を守れていない既知の問題があるため、修正されるまではエラーではなくwarningにする
+  if (nrow(tmp_ec_ng) > 0) {
+    warning(str_c(
+      ec_label, ": 前レコード投与終了日チェック: ", nrow(tmp_ec_ng), "件NG(ECSTDTCが1つ前のレコードのECENDTCより前、全", nrow(tmp_ec), "件中)"
+    ), call. = FALSE)
+  } else {
+    cat(ec_label, ": 前レコード投与終了日チェック: OK(ECSTDTCが1つ前のレコードのECENDTC以降であることを確認、", nrow(tmp_ec), "件)\n", sep = "")
+  }
+}
