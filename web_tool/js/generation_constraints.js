@@ -129,7 +129,8 @@ function extractPresencePredicate(validatorKey, value) {
   if (validatorKey !== "validate_presence_if" || value == null) {
     return { suffix: null, type: null };
   }
-  const m = value.match(PRESENCE_PREDICATE_RE);
+  // 前後に空白が入った条件(例: " ORRES.blank?")も同じ意味として解釈する
+  const m = value.trim().match(PRESENCE_PREDICATE_RE);
   if (!m) return { suffix: null, type: null };
   return { suffix: m[1], type: m[2] };
 }
@@ -1206,6 +1207,37 @@ function applyPresenceConditions(data, presenceConditions, cdiscVariableToPrefix
     orderedGroups.push(groupList[i]);
   };
   groupList.forEach((_, i) => visit(i));
+
+  // 2つの変数が互いに「相手が空欄のときだけ値を持つ」(X.blank?)関係にある場合(例: MIORRESが
+  // STAT.blank?、MISTATがORRES.blank?)、上の順序付けでは循環を解決できず、常に先に処理された側が
+  // null化されて片方の値しか生成されない。両方に値がある行は、行ごとにどちらを残すかをランダムに
+  // 決め、もう一方を先にnull化しておく
+  const isBlankOnly = (g) => g.expectedValues.size === 1 && g.expectedValues.has("");
+  groupList.forEach((g1, i) => {
+    groupList.forEach((g2, j) => {
+      if (j <= i || !isBlankOnly(g1) || !isBlankOnly(g2)) return;
+      const isMutual =
+        g1.ref_cdisc_variable === g2.cdisc_variable &&
+        g2.ref_cdisc_variable === g1.cdisc_variable &&
+        g1.alias_name === g2.alias_name &&
+        g1.label === g2.label &&
+        (g1.ref_alias_name == null || g1.ref_alias_name === g1.alias_name) &&
+        (g2.ref_alias_name == null || g2.ref_alias_name === g2.alias_name) &&
+        (g1.ref_label == null || g1.ref_label === g1.label) &&
+        (g2.ref_label == null || g2.ref_label === g2.label);
+      if (!isMutual) return;
+      const targetRows = ownTargetRows(g1.alias_name, g1.label);
+      const isBlank = (v) => v == null || v === "";
+      data.forEach((row, k) => {
+        if (!targetRows[k] || isBlank(row[g1.cdisc_variable]) || isBlank(row[g2.cdisc_variable])) return;
+        if (rng() < 0.5) {
+          row[g1.cdisc_variable] = null;
+        } else {
+          row[g2.cdisc_variable] = null;
+        }
+      });
+    });
+  });
 
   orderedGroups.forEach((g) => {
     const targetRows = ownTargetRows(g.alias_name, g.label);
