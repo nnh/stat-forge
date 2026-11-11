@@ -997,12 +997,11 @@ for (sheet in edc_spec_json$sheets) {
     ungroup() %>%
     filter(!is.na(prev_ECENDTC) & prev_ECENDTC != "")
   tmp_ec_ng <- tmp_ec %>% filter(as.Date(ECSTDTC) < as.Date(prev_ECENDTC))
-  # ジェネレータがブロックを跨ぐ日付の連鎖を守れていない既知の問題があるため、修正されるまではエラーではなくwarningにする
   if (nrow(tmp_ec_ng) > 0) {
-    warning(str_c(
-      ec_label, ": 前レコード投与終了日チェック: ", nrow(tmp_ec_ng), "件NG(ECSTDTCが1つ前のレコードのECENDTCより前、全", nrow(tmp_ec), "件中)"
-    ), call. = FALSE)
-  } else {
-    cat(ec_label, ": 前レコード投与終了日チェック: OK(ECSTDTCが1つ前のレコードのECENDTC以降であることを確認、", nrow(tmp_ec), "件)\n", sep = "")
+    stop(str_c(
+      ec_label, ": 前レコード投与終了日チェック: ", nrow(tmp_ec_ng), "件NG(ECSTDTCが1つ前のレコードのECENDTCより前。USUBJID: ",
+      paste(unique(tmp_ec_ng[["USUBJID"]]), collapse = ", "), ")"
+    ))
   }
+  cat(ec_label, ": 前レコード投与終了日チェック: OK(ECSTDTCが1つ前のレコードのECENDTC以降であることを確認、", nrow(tmp_ec), "件)\n", sep = "")
 }
