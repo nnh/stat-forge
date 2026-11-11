@@ -93,27 +93,36 @@ function buildSubjectActiveSheets(sheets, sheetGroups, usubjids) {
 // ageBounds(cdisc_variable, ref_cdisc_variable, min_age, max_age)のうち、ref_cdisc_variable=="BRTHDTC"な
 // 行(=BRTHDTCからの年齢で条件付けられている項目、例: RFICDTC)を全て満たす年齢範囲(交差範囲)を求める。
 // 該当行が無い(=年齢に関する制約が試験仕様に無い)場合は、小児(0歳)〜高齢者(89歳)まで幅広く対象にする
-// (Rのcompute_birth_age_range()に対応)
+// (Rのcompute_birth_age_range()に対応)。maxAgeMarginは、上限の年齢を「その年齢の最終日」まで含めるために
+// 上限に足す幅(年)。年齢(age)なら1年、月齢(age_m)の上限なら1か月(1/12年)になる
 function computeBirthAgeRange(ageBounds) {
   const relevant = (ageBounds || []).filter((ab) => ab.ref_cdisc_variable === "BRTHDTC");
-  if (relevant.length === 0) return { minAge: 0, maxAge: 89 };
+  if (relevant.length === 0) return { minAge: 0, maxAge: 89, maxAgeMargin: 1 };
   const minAges = relevant.map((r) => r.min_age).filter((v) => v != null);
-  const maxAges = relevant.map((r) => r.max_age).filter((v) => v != null);
+  const maxRows = relevant.filter((r) => r.max_age != null);
+  let maxAge = 89;
+  let maxAgeMargin = 1;
+  if (maxRows.length > 0) {
+    const tightest = maxRows.reduce((a, b) => (b.max_age < a.max_age ? b : a));
+    maxAge = tightest.max_age;
+    maxAgeMargin = tightest.age_unit === "month" ? 1 / 12 : 1;
+  }
   return {
     minAge: minAges.length > 0 ? Math.max(...minAges) : 0,
-    maxAge: maxAges.length > 0 ? Math.min(...maxAges) : 89,
+    maxAge,
+    maxAgeMargin,
   };
 }
 
 // BRTHDTC(生年月日)を生成する。R版のgenerate_brthdtc.Rに対応する。
 // minAge〜maxAge歳の範囲で一様ランダムに年齢(日単位)を選び、refDateから引いて生年月日にする
-// (minAge/maxAgeは通常computeBirthAgeRange()で試験のageBoundsから求めた値を渡す)
-function generateBrthdtc(n, refDate, minAge = 0, maxAge = 89) {
+// (minAge/maxAge/maxAgeMarginは通常computeBirthAgeRange()で試験のageBoundsから求めた値を渡す)
+function generateBrthdtc(n, refDate, minAge = 0, maxAge = 89, maxAgeMargin = 1) {
   const ref = new Date(refDate);
   const daysPerYear = 365.25;
   const oneDay = 24 * 60 * 60 * 1000;
   const minDays = minAge * daysPerYear;
-  const maxDays = (maxAge + 1) * daysPerYear - 1;
+  const maxDays = (maxAge + maxAgeMargin) * daysPerYear - 1;
 
   const brthdtc = [];
   for (let i = 0; i < n; i += 1) {
@@ -132,7 +141,7 @@ function generateBrthdtc(n, refDate, minAge = 0, maxAge = 89) {
 //          dummySites: 生成した施設一覧(SITEID/SITENAME) }
 function buildDmDomain(n, sheets, sheetGroups, ageBounds, studyid = "dummy-studyid", siteN = 10) {
   const birthAgeRange = computeBirthAgeRange(ageBounds);
-  const brthdtc = generateBrthdtc(n, new Date(), birthAgeRange.minAge, birthAgeRange.maxAge);
+  const brthdtc = generateBrthdtc(n, new Date(), birthAgeRange.minAge, birthAgeRange.maxAge, birthAgeRange.maxAgeMargin);
   const dummySites = generateDummySites(siteN);
   const usubjids = [];
   for (let i = 1; i <= n; i += 1) {
