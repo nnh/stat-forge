@@ -129,11 +129,6 @@ function generateAndWriteCsvs(edcSpec, seedValue, outDir) {
     otherDomains.DD = dropEmptyDomainRows(otherDomains.DD, ddGatedVars);
   }
   mergeLinkedDomains(otherDomains, aeLinkedDomains);
-  applyOrresPopulators(otherDomains, {
-    LB: (d) => populateLbOrres(d, cdiscVariableValues, fieldNumericBounds),
-    TR: (d) => populateTrOrres(d, cdiscVariableValues, fieldNumericBounds),
-    VS: (d) => populateVsOrres(d, cdiscVariableValues, fieldNumericBounds),
-  });
   Object.keys(otherDomains).forEach((prefix) => {
     otherDomains[prefix] = sortBySeq(otherDomains[prefix], prefix);
   });

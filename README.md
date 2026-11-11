@@ -51,7 +51,7 @@ web_tool/
 │   ├── ae_domain.js                # AEドメイン生成
 │   ├── ds_domain.js                # DSドメイン生成
 │   ├── other_domains.js            # DM/AE/DS以外の各ドメイン生成(CM/MH/EG等)
-│   ├── orres_realism.js            # LB/TR/VSのORRESを数値バリデーションに沿った値に置き換え
+│   ├── orres_realism.js            # *DOSE項目を数値バリデーションに沿った値に置き換え
 │   ├── dictionaries.js             # MedDRA/WHO Drug辞書バージョンの選択式読み込み
 │   ├── dictionary_data_dir.js      # dictionary_data/フォルダへのFile System Access API管理・D&D登録
 │   ├── meddra_import.js            # MedDRAバージョンフォルダ(.asc)のパース

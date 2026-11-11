@@ -681,11 +681,12 @@ function buildFieldNumericLookup(fieldNumericBounds) {
   return lookup;
 }
 
-// 数値バリデーション(min/max)を持つtext型項目に入れる整数値を返す。下限が無い場合は0、上限が無い場合は
-// 下限+10とする(下限が上限を超える場合は下限を上限に合わせる)
+// 数値バリデーション(numericality)を持つtext型項目に入れる整数値を返す。下限が無い場合は0、上限が無い場合は
+// 100とする(下限が100以上で上限が無い場合は、範囲外にならないよう下限+100を上限にする。
+// 下限が上限を超える場合は下限を上限に合わせる)
 function generateNumericTextValue(bound) {
   let lo = bound.min_value != null ? bound.min_value : 0;
-  const hi = bound.max_value != null ? bound.max_value : lo + 10;
+  const hi = bound.max_value != null ? bound.max_value : lo >= 100 ? lo + 100 : 100;
   if (lo > hi) lo = hi;
   const loInt = Math.ceil(lo);
   const hiInt = Math.floor(hi);
@@ -695,14 +696,18 @@ function generateNumericTextValue(bound) {
 
 // radio_button/check_box/date/doseのいずれでも埋まらなかった対象変数に、とりあえずDUMMY値を格納する
 // (Rのpopulate_dummy_fields()に対応)。fieldNumericBoundsに数値バリデーションがあるalias_nameの項目は、
-// DUMMYではなくその範囲内の整数にする
+// DUMMYではなくその範囲内の整数にする(同じalias_name・変数に範囲あり/範囲なしの行が両方ある場合は範囲ありを優先する)
 function populateGenericDummyFields(data, spec, fieldNumericBounds) {
   const existingColumns = new Set(Object.keys(data[0] || {}));
   const remainingVars = [...new Set(spec.map((r) => r.cdisc_variable))].filter((v) => !existingColumns.has(v));
   const boundsByAliasVar = new Map();
   (fieldNumericBounds || []).forEach((r) => {
     const key = `${r.alias_name}|${r.cdisc_variable}`;
-    if (!boundsByAliasVar.has(key)) boundsByAliasVar.set(key, { min_value: r.min_value, max_value: r.max_value });
+    const current = boundsByAliasVar.get(key);
+    const hasBound = r.min_value != null || r.max_value != null;
+    if (!current || (hasBound && current.min_value == null && current.max_value == null)) {
+      boundsByAliasVar.set(key, { min_value: r.min_value, max_value: r.max_value });
+    }
   });
   remainingVars.forEach((varName) => {
     data.forEach((row) => {
@@ -1593,7 +1598,7 @@ function buildRepeatedDomain(dm, spec, prefix, registrationStartDate, meddraData
           row[varName] = sampleOne(doseChoices);
         });
       } else {
-        // 数値バリデーション(min/max)を持つtext型項目(例: 分割数)は、DUMMYではなくその範囲内の整数にする
+        // 数値バリデーション(numericality)を持つtext型項目(例: 分割数・検査値)は、DUMMYではなくその範囲内の整数にする
         const numericBound = fieldNumericLookup.get(`${key}|${varName}`);
         rows.forEach((row) => {
           row[varName] = numericBound ? generateNumericTextValue(numericBound) : "DUMMY";

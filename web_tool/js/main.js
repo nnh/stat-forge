@@ -470,15 +470,8 @@ document.getElementById("generate-btn").addEventListener("click", async () => {
   }
   // AE報告と同じ行として生成したリンク先ブロック(例: FA)を、対応するドメインにマージする
   mergeLinkedDomains(otherDomains, aeLinkedDomains);
-  // LB/TR/VS/FAのORRESを、それぞれの基準範囲・条件に基づいたそれらしい数値に置き換える
-  applyOrresPopulators(otherDomains, {
-    LB: (d) => populateLbOrres(d, cdiscVariableValues, fieldNumericBounds),
-    TR: (d) => populateTrOrres(d, cdiscVariableValues, fieldNumericBounds),
-    VS: (d) => populateVsOrres(d, cdiscVariableValues, fieldNumericBounds),
-    FA: (d) => populateFaOrres(d, cdiscVariableValues, fieldNumericBounds),
-  });
   // *DOSE項目を、TRT(例: CMTRT/PRTRT)ごとの数値バリデーション(min/max)に基づいたそれらしい
-  // 数値に置き換える(ORRESと同じ理由。*TRT列を持たないドメインやTRTごとの範囲が未定義の場合は無処理)
+  // 数値に置き換える(*TRT列を持たないドメインやTRTごとの範囲が未定義の場合は無処理)
   Object.keys(otherDomains).forEach((prefix) => {
     otherDomains[prefix] = populateDoseRealism(otherDomains[prefix], cdiscVariableValues, fieldNumericBounds, whoDrugIdf);
   });
