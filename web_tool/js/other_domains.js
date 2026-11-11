@@ -545,8 +545,22 @@ function resolveDateRefBoundVals(data, dateRefBounds, varName, boundTypeVal, exi
       refAlias != null &&
       (ownAlias !== refAlias || (hasLabel && ownLabel != null && refLabel != null && ownLabel !== refLabel));
 
+    // 同一alias内の別label(繰り返しブロックの別の回)にある別の変数を参照する場合(例: EC複数回投与で
+    // 次の回のECSTDTCが前の回のECENDTCを参照)も、参照先labelの行から値を引く。上のisSelfRefAcrossAliasOrLabelは
+    // 同じ変数名の参照しか対象にしていないため、そのままだと下のelse節(values = row[refVar]、つまり自分自身の行の
+    // ECENDTC)に落ち、自分の投与終了日を下限とする誤った比較になってしまう
+    const isOtherVarAcrossLabel =
+      refVar !== varName &&
+      hasAliasName &&
+      hasLabel &&
+      ownAlias != null &&
+      ownAlias === refAlias &&
+      ownLabel != null &&
+      refLabel != null &&
+      ownLabel !== refLabel;
+
     let values;
-    if (isSelfRefAcrossAliasOrLabel) {
+    if (isSelfRefAcrossAliasOrLabel || isOtherVarAcrossLabel) {
       const refMap = {};
       data.forEach((row) => {
         if (row.alias_name === refAlias && (refLabel == null || !hasLabel || row.label === refLabel)) {
@@ -564,7 +578,12 @@ function resolveDateRefBoundVals(data, dateRefBounds, varName, boundTypeVal, exi
           }
         });
       }
-      values = data.map((row) => (row.USUBJID in refMap ? refMap[row.USUBJID] : null));
+      // isOtherVarAcrossLabelで、参照先labelの行がこのdata・existingDataのどちらにも無い場合(参照先labelが
+      // 他ドメインのブロックで、injectCrossDomainRefs()で列として結合済みのケース)は、従来通り同じ行の列を使う
+      values =
+        isOtherVarAcrossLabel && Object.keys(refMap).length === 0
+          ? data.map((row) => row[refVar])
+          : data.map((row) => (row.USUBJID in refMap ? refMap[row.USUBJID] : null));
     } else {
       values = data.map((row) => row[refVar]);
     }
@@ -1645,6 +1664,19 @@ function buildRepeatedDomain(dm, spec, prefix, registrationStartDate, meddraData
       });
     }
     const chainAliasNames = [...new Set(chainBounds.map((r) => r.alias_name))];
+    // label内の参照(例: 同じ回のECENDTC>=ECSTDTC)のうち、chainVars同士・連鎖のあるalias内のものも
+    // regenerateDateChain()に渡す。label跨ぎの参照だけを渡すと、連鎖の途中のノード(例: 前の回のECENDTC)が
+    // 同じ回の開始日を下限にせず生成され、後段のclampDatesToDiscontinuation()がそれを修正する際に
+    // 次の回の開始日を追い越して連鎖が崩れてしまう
+    const sameLabelChainBounds = scopedDateRefBounds.filter(
+      (r) =>
+        chainAliasNames.includes(r.alias_name) &&
+        r.alias_name === r.ref_alias_name &&
+        r.label != null &&
+        r.label === r.ref_label &&
+        chainVars.includes(r.cdisc_variable) &&
+        chainVars.includes(r.ref_cdisc_variable)
+    );
     chainAliasNames.forEach((aliasVal) => {
       // scopedDateRefBoundsではなくchainBoundsを渡す。regenerateDateChain内でcdisc_variable単独でしか
       // 絞り込んでいないと、alias_name===aliasValかつcdisc_variableがchainVarsに含まれるが実際は
@@ -1652,7 +1684,7 @@ function buildRepeatedDomain(dm, spec, prefix, registrationStartDate, meddraData
       // 拾ってしまい、そのref先がこのalias内に存在しないため値を解決できないままminRow相当が非nullに
       // なり、本来効くはずのRFSTDTC等のデフォルト下限が適用されなくなる(実際に発生したバグ:
       // WBC/BLASTLEの等号制約が崩れた)
-      data = regenerateDateChain(data, aliasVal, chainBounds, chainVars, registrationStartDate, disconByUsubjid);
+      data = regenerateDateChain(data, aliasVal, [...chainBounds, ...sameLabelChainBounds], chainVars, registrationStartDate, disconByUsubjid);
     });
   }
   // clampDatesToDiscontinuation()はselfRefEdges(labelがあれば(alias_name, label)単位)で依存順に処理するため、
