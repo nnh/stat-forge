@@ -1,7 +1,7 @@
 // 画面操作の配線: JSONアップロード -> 設定入力 -> 生成 -> プレビュー/ダウンロード
 
-const APP_VERSION = "1.3";
-const APP_BUILD_DATE = "2026-10-13";
+const APP_VERSION = "1.4";
+const APP_BUILD_DATE = "2026-11-11";
 document.getElementById("app-version").textContent = `v${APP_VERSION} (${APP_BUILD_DATE})`;
 
 let edcSpec = null;
