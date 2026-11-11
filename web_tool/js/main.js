@@ -32,13 +32,51 @@ const dictionaryStatus = document.getElementById("dictionary-status");
 // valueのサニタイズが効かない)ため、type="text"にしてこちらで都度ASCII数字以外を除去する。
 // compositionend(IME確定)側でも同じ処理をしないと、確定直後の全角文字がinputイベントより
 // 前に反映されてすり抜けることがあるため両方に仕掛ける
-function sanitizeIntegerInputValue(el) {
+// 半角数字以外の文字を除去した場合は、入力欄の直後に「半角数字で入力してください」を一定時間表示する
+// (何も表示せずに文字が消えるだけだと、入力できない理由が利用者に分からないため)。
+// 半角数字が正しく入力された場合はその時点で消す
+const INTEGER_INPUT_WARNING_MS = 3000;
+function integerInputWarningElement(el) {
+  let warning = el.nextElementSibling;
+  if (!warning || !warning.classList.contains("integer-input-warning")) {
+    warning = document.createElement("span");
+    warning.className = "integer-input-warning";
+    warning.setAttribute("role", "status");
+    el.insertAdjacentElement("afterend", warning);
+  }
+  return warning;
+}
+function showIntegerInputWarning(el) {
+  const warning = integerInputWarningElement(el);
+  warning.textContent = "半角数字で入力してください";
+  clearTimeout(warning.hideTimer);
+  warning.hideTimer = setTimeout(() => {
+    warning.textContent = "";
+  }, INTEGER_INPUT_WARNING_MS);
+}
+function hideIntegerInputWarning(el) {
+  const warning = el.nextElementSibling;
+  if (!warning || !warning.classList.contains("integer-input-warning")) return;
+  clearTimeout(warning.hideTimer);
+  warning.textContent = "";
+}
+function sanitizeIntegerInputValue(el, event) {
   const digitsOnly = el.value.replace(/[^0-9]/g, "");
-  if (el.value !== digitsOnly) el.value = digitsOnly;
+  if (el.value !== digitsOnly) {
+    el.value = digitsOnly;
+    showIntegerInputWarning(el);
+    return;
+  }
+  // IME確定(compositionend)の直後にも、確定した全角文字をdataに持つinputイベントが来ることがある
+  // (その時点では既に除去済みのため値は正しい)。表示したばかりのメッセージを消さないよう、
+  // 半角数字が実際に入力された場合だけ消す
+  if (event && typeof event.data === "string" && /^[0-9]+$/.test(event.data)) {
+    hideIntegerInputWarning(el);
+  }
 }
 document.querySelectorAll(".integer-input").forEach((el) => {
-  el.addEventListener("input", () => sanitizeIntegerInputValue(el));
-  el.addEventListener("compositionend", () => sanitizeIntegerInputValue(el));
+  el.addEventListener("input", (event) => sanitizeIntegerInputValue(el, event));
+  el.addEventListener("compositionend", (event) => sanitizeIntegerInputValue(el, event));
 });
 
 const VERSION_MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
