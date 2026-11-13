@@ -185,6 +185,10 @@ powershell -ExecutionPolicy Bypass -File .\scripts\deploy_to_production.ps1
 powershell -ExecutionPolicy Bypass -File .\scripts\deploy_to_production.ps1 -NoConfirm
 ```
 
+#### リリーステスト手順
+
+masterへのマージ後、本番フォルダへデプロイするまでの手順は [docs/release_procedure.md](docs/release_procedure.md) を参照。
+
 ## ライセンス
 
 MIT License(`LICENSE`参照)
