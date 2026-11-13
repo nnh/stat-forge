@@ -115,7 +115,7 @@ async function listVersionsFromDataDir(kind) {
   return labels;
 }
 
-// kind配下にversion.js(ファイル名はr_version側の変換スクリプトと同じ規則で
+// kind配下にversion.js(ファイル名は
 // バージョン名の記号類を_に置換したもの)が既に存在するかを調べる
 async function dictionaryVersionFileExists(kind, version) {
   const subDir = await currentDataDirHandle.getDirectoryHandle(kind, { create: true });

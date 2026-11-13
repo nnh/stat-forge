@@ -7,7 +7,7 @@ EDC仕様JSON(.json)から、統計解析プログラムの開発・検証用に
 - `FORGE ver1.4.html` — ダミーデータ生成ツールの起動ファイル(これをブラウザで開く)
 - `web_tool/` — 上記ツールの実装本体(js)
 - `dictionary_data/` — MedDRA/WHO Drugの辞書データ(変換済みJSファイル)の置き場
-- `r_version/` — 生成データの検証(バリデーション)スクリプト(R)
+- `validation/` — 生成データの検証(バリデーション)スクリプト(R)
 - `scripts/` — Web版の生成を自動化するスクリプト・回帰テスト(Playwright)
 
 各フォルダの詳細は「開発者向け」の「ディレクトリ構成」を参照。
@@ -65,21 +65,19 @@ dictionary_data/
 ├── meddra/                         # 変換済みMedDRAデータ(gitignore対象、フォルダのみ管理)
 └── who_drug/                       # 変換済みWHO Drug/IDFデータ(gitignore対象、フォルダのみ管理)
 
-r_version/
-├── constant.R                      # 定数(外部辞書のパス等)
-├── resolve_os_path.R               # 実行環境(Mac/Windows)に応じたパスの切り替え・Box同期フォルダのルート
-├── user_input.R                    # WHO Drug/IDFの辞書バージョン等の設定
-├── build_cdisc_variable_values.R   # EDC仕様JSONからcdisc_variable_values(選択肢・field_type定義)を組み立て
-├── read_who_drug_idf.R             # WHO Drug/IDFテーブルの読み込み・結合
-└── tools/
-    ├── validate_common.R           # バリデーション共通関数・run_full_validation
-    ├── validate_dm.R / validate_ae.R / validate_ds.R / validate_other_domains.R
-    │                               # ドメインごとの検証関数
-    ├── validate_test1_shared.R / validate_test2_shared.R
-    │                               # test1/test2で共通の検証処理
-    ├── validate_datasets_test3_fa.R  # test3のFA特別チェック(test3_webからsource)
-    └── validate_datasets_test1_web.R / test2_web.R / test3_web.R / test4_web.R / test5_web.R / test6_web.R
-                                    # Webツール生成CSVを検証するテスト本体
+validation/
+├── validation.Rproj                # RStudioプロジェクト(here()の起点。git管理外のため各自のRStudioで作成)
+├── config.R                        # 共通設定(Mac/Windowsのパス切り替え・Box同期フォルダのルート・WHO Drug/IDF辞書)
+├── lib/
+│   ├── validate_common.R           # バリデーション共通関数・run_full_validation
+│   ├── validate_dm.R / validate_ae.R / validate_ds.R / validate_other_domains.R
+│   │                               # ドメインごとの検証関数
+│   ├── build_cdisc_variable_values.R  # EDC仕様JSONからcdisc_variable_values(選択肢・field_type定義)を組み立て
+│   ├── read_who_drug_idf.R         # WHO Drug/IDFテーブルの読み込み・結合
+│   └── test1_checks.R / test2_checks.R / test3_fa_checks.R
+│                                   # 特定のテスト専用のチェック処理(test1/test2/test3から呼ぶ)
+└── tests/
+    └── test1.R 〜 test6.R          # Webツール生成CSVを検証するテスト本体(これを実行する)
 
 scripts/
 ├── generate_dummy_data.js          # Web版生成の自動化(Playwright)
@@ -101,12 +99,12 @@ package.json                        # scripts/の依存パッケージ(Playwrigh
 
 生成データの検証は以下のファイルを実行する:
 
-- `r_version/tools/validate_datasets_test1_web.R`
-- `r_version/tools/validate_datasets_test2_web.R`
-- `r_version/tools/validate_datasets_test3_web.R`
-- `r_version/tools/validate_datasets_test4_web.R`
-- `r_version/tools/validate_datasets_test5_web.R`
-- `r_version/tools/validate_datasets_test6_web.R`
+- `validation/tests/test1.R`
+- `validation/tests/test2.R`
+- `validation/tests/test3.R`
+- `validation/tests/test4.R`
+- `validation/tests/test5.R`
+- `validation/tests/test6.R`
 
 ##### セットアップ
 

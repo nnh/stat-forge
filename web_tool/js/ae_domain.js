@@ -200,7 +200,7 @@ function sampleMeddraRows(meddraData, n, poolSize = 20) {
 
 // presence_conditionsのうち、ref_cdisc_variableが"<prefix>LLTCD"(meddra参照)かつcondition_type=="equals"な
 // 行のexpected_valueを集め、必ずサンプルに混ぜ込むべきLLTコード一覧を求める。
-// R版はconstant.Rに手動定数(required_ae_llt_codes)として持っていたが、Web版はpresence_conditionsを
+// presence_conditionsを
 // 既に構築しているため、そこから自動導出する(試験ごとの手動設定は不要にする)。
 // 該当する行が無ければ空配列を返す(=注入しない。指定なしでも正常動作する)
 function deriveRequiredLltCodes(presenceConditions) {

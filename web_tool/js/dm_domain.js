@@ -3,7 +3,7 @@
 // radio_button型・check_box型・date型項目の埋め込み、それ以外のDUMMYフォールバックまで対応する。
 // meddra/drug型項目(外部辞書が必要)、presence_conditionsによるゲーティングはまだ未移植
 
-// R版constant.Rのdummy_siteに対応。ダミー施設をn件生成する(codeは9桁のランダムな数値文字列で重複無し、
+// ダミー施設をn件生成する(codeは9桁のランダムな数値文字列で重複無し、
 // jaは「ダミーNN病院」、enは「dummyN」)。生成のたびに呼び、その回の生成セッション内で使い回す
 function generateDummySites(n = 10) {
   const usedIds = new Set();

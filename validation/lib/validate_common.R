@@ -1,14 +1,14 @@
 library(tidyverse)
 library(here)
 
-source(here("resolve_os_path.R"))
+source(here("config.R"))
 
 # DM/DS/AE/other_domainsの構造的な自動チェック(validate_dm()等)は、それぞれ専用ファイルに分けている。
 # testN.Rが個別にsourceしなくても済むよう、ここでまとめてsourceしておく
-source(here("tools/validate_dm.R"))
-source(here("tools/validate_ds.R"))
-source(here("tools/validate_ae.R"))
-source(here("tools/validate_other_domains.R"))
+source(here("lib/validate_dm.R"))
+source(here("lib/validate_ds.R"))
+source(here("lib/validate_ae.R"))
+source(here("lib/validate_other_domains.R"))
 # USUBJIDごとの中止日テーブルを作る(DSTERM!="COMPLETED"のレコード。DEATHも含む)。
 # RANDOMIZED(Web版ds_domain.jsのaddRandomizationDsRows()が追加する無作為化マイルストーン行)も、
 # 中止理由ではなく通常は治療開始前の早い日付のため除外する(無作為化日が誤って中止日として扱われないようにするため)。

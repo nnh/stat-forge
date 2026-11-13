@@ -6,7 +6,7 @@ library(here)
 # 事前準備: Webツールでfortest2用JSONを読み込んで生成し「ZIPで一括ダウンロード」した
 # dummy_data.zipを、ダウンロードフォルダのdummy_dataに展開しておくこと
 rm(list = ls())
-source(here("resolve_os_path.R"))
+source(here("config.R"))
 
 # このファイル固定のjson_path
 json_path <- file.path(box_root, "Datacenter/Users/ohtsuka/2026/stat-forge-test/test2/json/fortest2_260826_1501.json")
@@ -20,19 +20,16 @@ other_domains_web_csv_dir <- fs::path_home("Downloads", "dummy_data")
 dm_web_csv_path <- file.path(other_domains_web_csv_dir, "DM_dummy.csv")
 ae_web_csv_path <- file.path(other_domains_web_csv_dir, "AE_dummy.csv")
 ds_web_csv_path <- file.path(other_domains_web_csv_dir, "DS_dummy.csv")
-source(here("tools/validate_common.R"))
+source(here("lib/validate_common.R"))
 
 # cdisc_variable_values(run_full_validation・特別チェックで使う選択肢・field_typeの定義)は
 # EDC仕様(JSON)由来で被験者データには依存しないため、JSONから直接作る
-source(here("build_cdisc_variable_values.R"))
+source(here("lib/build_cdisc_variable_values.R"))
 edc_spec <- jsonlite::read_json(json_path)
 cdisc_variable_values <- build_cdisc_variable_values(edc_spec, edc_spec[["sheets"]])[["cdisc_variable_values"]]
 
-# who_drug_idf(CMのチェックで使うWHO Drug/IDF)。辞書のパス・バージョンはR版と同じ
-# constant.R / user_input.R の設定を使う
-source(here("constant.R"))
-source(here("user_input.R"))
-source(here("read_who_drug_idf.R"))
+# who_drug_idf(CMのチェックで使うWHO Drug/IDF)。辞書のパス・バージョンはconfig.Rの設定を使う
+source(here("lib/read_who_drug_idf.R"))
 who_drug_idf <- build_who_drug_idf(who_drug_idf_parent_dir, who_drug_idf_version_folder)
 
 # Web版CSVとの整合性チェック(json_pathの設定間違いの検知)用のSTUDYID期待値。
@@ -70,11 +67,11 @@ discontinuation_date <- build_discontinuation_date_table(ds)
 # (source()より前に行うこと。後だと読み込んだ関数まで削除されてしまう)
 rm(list = setdiff(ls(), c("ae", "dm", "ds", "other_domains", "facilities", "cdisc_variable_values", "registration_n", "who_drug_idf", "json_path", "discontinuation_date", "fixed_value_checks_csv_path")))
 
-source(here("tools/validate_common.R"))
+source(here("lib/validate_common.R"))
 
 # ここから下の共通処理(CM/TR特別チェック・run_full_validation呼び出し・ドメイン名一覧の確認)は
-# validate_test2_shared.Rにまとめてある
-source(here("tools/validate_test2_shared.R"))
+# lib/test2_checks.Rにまとめてある
+source(here("lib/test2_checks.R"))
 
 # DMのSITEIDが、facilities_dummy.csv(施設一覧)のcode列に含まれる値であることを確認する
 dm %>% check_values_subset_of("SITEID", facilities[["code"]], domain_name = "DM/facilities")

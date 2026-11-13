@@ -1,4 +1,4 @@
-# validate_datasets_test2_web.R(Webツール生成のCSVを比較元にする)で使う共通の処理。
+# tests/test2.R(Webツール生成のCSVを比較元にする)専用のチェック処理。
 # 呼び出し元スクリプトが ae/dm/ds/other_domains/cdisc_variable_values/registration_n/who_drug_idf/
 # json_path/discontinuation_date を用意した上でこのファイルをsourceすること
 
@@ -319,7 +319,7 @@ check_tr_tu_dtc <- function(data, dm, cdisc_variable_values) {
 other_domains_special_checks <- list(CM = check_cm_baseline1, TR = check_tr_tu_dtc)
 
 # 比較対象のCSVファイルを格納しているディレクトリ(直下のCSVを全て読み込む)。
-# json_pathのファイル名ごとにcsv_dir_by_file(tools/validate_common.R)で管理する
+# json_pathのファイル名ごとにcsv_dir_by_file(lib/validate_common.R)で管理する
 csv_dir <- csv_dir_by_file[[basename(json_path)]]
 
 validation <- run_full_validation(ae, dm, ds, other_domains, cdisc_variable_values, registration_n, csv_dir, other_domains_special_checks, discontinuation_date)

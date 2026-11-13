@@ -1,6 +1,6 @@
 library(here)
 rm(list = ls())
-source(here("resolve_os_path.R"))
+source(here("config.R"))
 
 # check_value_equals(固定値チェック)用のCSV設定ファイルのパス。内容(チェックしたい固定値)は
 # 試験ごとに異なるため、ここで指定する。リポジトリ外の任意の場所でよい
@@ -14,7 +14,7 @@ ds_web_csv_path <- file.path(other_domains_web_csv_dir, "DS_dummy.csv")
 
 # このファイル固定のjson_path
 json_path <- file.path(box_root, "Datacenter/Users/ohtsuka/2026/stat-forge-test/test4/json/fortest4_260826_1501.json")
-source(here("tools/validate_common.R"))
+source(here("lib/validate_common.R"))
 
 # Web版CSVとの整合性チェック(json_pathの設定間違いの検知)用のSTUDYID期待値。
 # STUDYID文字列をここに直接書きたくないため、Web版(main.js)と同じくEDC仕様JSONのname(試験名)+"_dummy"から作る
@@ -51,7 +51,7 @@ discontinuation_date <- build_discontinuation_date_table(ds)
 # (source()より前に行うこと。後だと読み込んだ関数まで削除されてしまう)
 rm(list = setdiff(ls(), c("ae", "dm", "ds", "other_domains", "facilities", "registration_n", "json_path", "discontinuation_date", "fixed_value_checks_csv_path")))
 
-source(here("tools/validate_common.R"))
+source(here("lib/validate_common.R"))
 
 # DMのSITEIDが、facilities_dummy.csv(施設一覧)のcode列に含まれる値であることを確認する
 dm %>% check_values_subset_of("SITEID", facilities[["code"]], domain_name = "DM/facilities")
@@ -62,7 +62,7 @@ names(other_domains) <- tolower(names(other_domains))
 list2env(other_domains, envir = .GlobalEnv)
 
 # test4個別チェック
-# ここにドメインごとのチェックを追加していく(参考: tools/validate_datasets_test1_web.R・test2_web.R・test3_web.R)
+# ここにドメインごとのチェックを追加していく(参考: tests/test1.R〜test3.R)
 
 # AE(ae1-3 / sae_report1-4共通の重篤性・評価項目)
 # AESER(Y/N)/AEACN(6択)/AEREL(2択)/AEOUT(5択)/AETOXGR(1-5)は、sae_report1-4・ae1-3のどちらも
@@ -521,7 +521,7 @@ for (faspid in fa_ae_linked_faspid) {
 #IE
 # IETESTCD(field9等、is_invisible)ごとにIETEST/IECAT/IEORRES(field10/11/12相当)が固定値と
 # 一致することと、IEORRESが入っている行だけIEDTC(確認日)が必須(入っていない行は空欄)であることを
-# 確認する(test2のvalidate_test2_shared.R記載のrun_ie_testcd_checksと同じ考え方)
+# 確認する(lib/test2_checks.R記載のrun_ie_testcd_checksと同じ考え方)
 run_ie_testcd_checks <- function(ie, ietestcd, suffix, fixed_value_checks_csv_path) {
   target_ie <- c("IETEST", "IECAT", "IEORRES")
   tmp_ie <- ie %>% filter(IETESTCD == ietestcd)

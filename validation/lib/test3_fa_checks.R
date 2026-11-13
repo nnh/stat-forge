@@ -1,4 +1,4 @@
-# validate_datasets_test3_web.RのFA(Findings About)関連チェックを切り出したファイル。
+# tests/test3.RのFA(Findings About)関連チェックを切り出したファイル。
 # 呼び出し元スクリプトが fa/dm/fixed_value_checks_csv_path を用意した上でこのファイルをsourceすること
 
 # FA: FATESTCDごとの個別チェック(test3用)。指定visitnum・faobj・falocのレコードに絞り込み、FATEST

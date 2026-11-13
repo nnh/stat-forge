@@ -1,5 +1,5 @@
 // WHO Drug/IDFバージョンフォルダ(WHODD・IDFサブフォルダ)をパースし、
-// r_version/read_who_drug_idf.RのbuildWhoDrugIdf()と同じ結合結果
+// validation/lib/read_who_drug_idf.Rのbuild_who_drug_idf()と同じ結合結果
 // (drug_code, full_name_en, generic_name_en)を持つ{columns, rows}形式のオブジェクトを作る。
 // IDF/full_ja.txtは最終出力列に使われないため読み込まない。
 // IDF/data.txtはCP932(Shift-JIS)エンコードだが、使う列(drug_code・SEQ・FLG)はASCIIのみのため、

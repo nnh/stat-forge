@@ -153,10 +153,10 @@ dictionary_data/who_drug/*
 !dictionary_data/who_drug/.gitkeep
 
 # 旧テスト設定ファイル(現在は不使用。各自のローカルに残っている場合の誤コミット防止)
-r_version/test_config.R
+**/test_config.R
 .Rproj.user
 
 # 個人のローカルパスを書くCSV目検比較用スクリプト
-r_version/tools/compare_csv_manual_1.R
+validation/**/compare_csv_manual_1.R
 
-r_version/tools/compare_csv_manual_2.R
+validation/**/compare_csv_manual_2.R

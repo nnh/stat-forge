@@ -1,6 +1,6 @@
 library(here)
 rm(list = ls())
-source(here("resolve_os_path.R"))
+source(here("config.R"))
 
 # check_value_equals(固定値チェック)用のCSV設定ファイルのパス。内容(チェックしたい固定値)は
 # 試験ごとに異なるため、ここで指定する。リポジトリ外の任意の場所でよい
@@ -14,7 +14,7 @@ ds_web_csv_path <- file.path(other_domains_web_csv_dir, "DS_dummy.csv")
 
 # このファイル固定のjson_path
 json_path <- file.path(box_root, "Datacenter/Users/ohtsuka/2026/stat-forge-test/test6/json/fortest6_261028_1626.json")
-source(here("tools/validate_common.R"))
+source(here("lib/validate_common.R"))
 
 # Web版CSVとの整合性チェック(json_pathの設定間違いの検知)用のSTUDYID期待値。
 # STUDYID文字列をここに直接書きたくないため、Web版(main.js)と同じくEDC仕様JSONのname(試験名)+"_dummy"から作る
@@ -51,7 +51,7 @@ discontinuation_date <- build_discontinuation_date_table(ds)
 # (source()より前に行うこと。後だと読み込んだ関数まで削除されてしまう)
 rm(list = setdiff(ls(), c("ae", "dm", "ds", "other_domains", "facilities", "registration_n", "json_path", "discontinuation_date", "fixed_value_checks_csv_path")))
 
-source(here("tools/validate_common.R"))
+source(here("lib/validate_common.R"))
 
 # DMのSITEIDが、facilities_dummy.csv(施設一覧)のcode列に含まれる値であることを確認する
 dm %>% check_values_subset_of("SITEID", facilities[["code"]], domain_name = "DM/facilities")
@@ -62,7 +62,7 @@ names(other_domains) <- tolower(names(other_domains))
 list2env(other_domains, envir = .GlobalEnv)
 
 # test6個別チェック
-# ここにドメインごとのチェックを追加していく(参考: tools/validate_datasets_test1_web.R〜test5_web.R)
+# ここにドメインごとのチェックを追加していく(参考: tests/test1.R〜test5.R)
 # data(domainドメイン)のtarget列(suffix付き)が、fixed_value_checks_csv_pathの期待値と一致することを確認する
 run_target_value_checks <- function(data, domain) {
   str_c(target, suffix) %>% walk(~ run_value_equals_checks_from_csv(data, domain, .x, fixed_value_checks_csv_path))

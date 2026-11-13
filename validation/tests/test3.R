@@ -1,6 +1,6 @@
 library(here)
 rm(list = ls())
-source(here("resolve_os_path.R"))
+source(here("config.R"))
 
 # check_value_equals(固定値チェック)用のCSV設定ファイルのパス。内容(チェックしたい固定値)は
 # 試験ごとに異なるため、ここで指定する。リポジトリ外の任意の場所でよい
@@ -14,7 +14,7 @@ ds_web_csv_path <- file.path(other_domains_web_csv_dir, "DS_dummy.csv")
 
 # このファイル固定のjson_path
 json_path <- file.path(box_root, "Datacenter/Users/ohtsuka/2026/stat-forge-test/test3/json/fortest3_260826_1452.json")
-source(here("tools/validate_common.R"))
+source(here("lib/validate_common.R"))
 
 # Web版CSVとの整合性チェック(json_pathの設定間違いの検知)用のSTUDYID期待値。
 # STUDYID文字列をここに直接書きたくないため、Web版(main.js)と同じくEDC仕様JSONのname(試験名)+"_dummy"から作る
@@ -51,7 +51,7 @@ discontinuation_date <- build_discontinuation_date_table(ds)
 # (source()より前に行うこと。後だと読み込んだ関数まで削除されてしまう)
 rm(list = setdiff(ls(), c("ae", "dm", "ds", "other_domains", "facilities", "registration_n", "json_path", "discontinuation_date", "fixed_value_checks_csv_path")))
 
-source(here("tools/validate_common.R"))
+source(here("lib/validate_common.R"))
 
 # DMのSITEIDが、facilities_dummy.csv(施設一覧)のcode列に含まれる値であることを確認する
 dm %>% check_values_subset_of("SITEID", facilities[["code"]], domain_name = "DM/facilities")
@@ -830,8 +830,8 @@ tmp_ec_maint %>% filter(.data[[str_c("ECOCCUR", suffix)]] != "Y") %>% check_blan
 tmp_ec_maint %>% inner_join(dm %>% select(USUBJID, RFSTDTC), by = "USUBJID") %>%
   check_date_before_today("ECSTDTC", domain_name = "EC")
 
-# FA(Findings About)関連チェックはtools/validate_datasets_test3_fa.Rに切り出してある
-source(here("tools/validate_datasets_test3_fa.R"))
+# FA(Findings About)関連チェックはlib/test3_fa_checks.Rに切り出してある
+source(here("lib/test3_fa_checks.R"))
 
 # GRADE(重症度)評価パネル(79項目)は、prephase以降の治療フェーズ系18シートで共通して使われている
 # (各シートのVISITNUMは互いに異なる)。シートごとにVISITNUMを指定し、check_fa_grade_panel()で

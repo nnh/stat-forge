@@ -61,7 +61,7 @@ test1〜test6を順に、1テストずつ以下を行う。
    | test3 | 5000 | 1000 | 100 |
    | test1・test4・test5・test6 | 1000 | 1000 | 初期値 |
 4. 「ZIPで一括ダウンロード」を押し、ダウンロードフォルダの `dummy_data.zip` を展開する
-5. `r_version/tools/validate_datasets_testN_web.R` を先頭から実行する
+5. `validation/tests/testN.R` を先頭から実行する
 6. 結果を確認する
    - エラーで停止せず最後まで通ること
    - 出たワーニングの内容に問題がないこと
