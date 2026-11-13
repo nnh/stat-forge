@@ -10,7 +10,7 @@
   dictionary_data フォルダ(本番の実データ)は対象外。一切触らない。
 
 .PARAMETER DestinationRoot
-  本番フォルダのパス。省略時は既定の本番パスを使う。
+  本番フォルダのパス。省略時は既定の本番パス(<ユーザーのホーム>\Box\Stat\Tools\FORGE)を使う。
 
 .PARAMETER NoConfirm
   確認プロンプトを出さずに実行する(自動化用)。
@@ -19,7 +19,7 @@
   .\scripts\deploy_to_production.ps1
 #>
 param(
-  [string]$DestinationRoot = "C:\Users\c0002691\Box\Stat\Tools\FORGE",
+  [string]$DestinationRoot = (Join-Path $env:USERPROFILE "Box\Stat\Tools\FORGE"),
   [switch]$NoConfirm
 )
 
