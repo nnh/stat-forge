@@ -16,22 +16,11 @@ ds_web_csv_path <- file.path(other_domains_web_csv_dir, "DS_dummy.csv")
 json_path <- file.path(box_root, "Datacenter/Users/ohtsuka/2026/stat-forge-test/test4/json/fortest4_260826_1501.json")
 source(here("tools/validate_common.R"))
 
-# cdisc_variable_values・registration_n・who_drug_idfはEDC仕様(JSON)/辞書由来で被験者データには
-# 依存しないため、R側でload_edc_spec()を実行して取得する(このとき同時に生成されるR版の
-# ae/dm/ds/other_domains・discontinuation_dateは、このあと全てWeb版CSVの内容で上書きするため使わない)
-source(here("load_edc_spec.R"))
-load_edc_spec(json_path)
+# Web版CSVとの整合性チェック(json_pathの設定間違いの検知)用のSTUDYID期待値。
+# STUDYID文字列をここに直接書きたくないため、Web版(main.js)と同じくEDC仕様JSONのname(試験名)+"_dummy"から作る
+expected_studyid <- str_c(jsonlite::read_json(json_path)[["name"]], "_dummy")
 
-# R版(正しいjson_pathから生成)のSTUDYIDを、Web版CSVとの整合性チェックの期待値として控えておく。
-# STUDYID文字列をここに直接書きたくないため、json_pathから実際に生成した値を使う
-expected_studyid <- dm[["STUDYID"]][1]
-
-rm(dm)
-rm(ae)
-rm(ds)
-rm(other_domains)
-
-# 被験者データ(ae/dm/ds/other_domains)をWebツールが生成したCSVで上書きする
+# 被験者データ(ae/dm/ds/other_domains)をWebツールが生成したCSVから読み込む
 dm <- read_csv(dm_web_csv_path, col_types = cols(.default = "c"), na = character(0))
 ae <- read_csv(ae_web_csv_path, col_types = cols(.default = "c"), na = character(0))
 ds <- read_csv(ds_web_csv_path, col_types = cols(.default = "c"), na = character(0))
@@ -45,7 +34,7 @@ facilities <- other_domains[["facilities"]]
 other_domains <- other_domains[setdiff(names(other_domains), c("DM", "AE", "DS", "facilities"))]
 
 # json_pathの設定間違い(意図しない試験のJSONを指している)を、CSVの中身からも検知できるよう、
-# 全ドメインのSTUDYIDがR版(正しいjson_path)のものと一致することを確認する
+# 全ドメインのSTUDYIDがjson_pathのEDC仕様JSONから作った期待値と一致することを確認する
 dm %>% check_studyid_matches(expected_studyid, domain_name = "DM")
 ae %>% check_studyid_matches(expected_studyid, domain_name = "AE")
 ds %>% check_studyid_matches(expected_studyid, domain_name = "DS")
@@ -55,13 +44,12 @@ for (prefix in names(other_domains)) {
 
 registration_n <- nrow(dm)
 # discontinuation_dateは被験者ごとの中止日という「その乱数シードでの生成結果」に依存する値のため、
-# Web版自身のdsから作り直す(R版のdiscontinuation_dateをそのまま使うと、対応するUSUBJIDの
-# 中止日が互いに無関係な値になり誤検知するため)
+# Web版自身のdsから作る
 discontinuation_date <- build_discontinuation_date_table(ds)
 
 # 比較に不要な中間オブジェクトが環境に残らないよう、それら以外は削除する
 # (source()より前に行うこと。後だと読み込んだ関数まで削除されてしまう)
-rm(list = setdiff(ls(), c("ae", "dm", "ds", "other_domains", "facilities", "cdisc_variable_values", "registration_n", "who_drug_idf", "json_path", "discontinuation_date", "fixed_value_checks_csv_path")))
+rm(list = setdiff(ls(), c("ae", "dm", "ds", "other_domains", "facilities", "registration_n", "json_path", "discontinuation_date", "fixed_value_checks_csv_path")))
 
 source(here("tools/validate_common.R"))
 
