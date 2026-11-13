@@ -1,4 +1,4 @@
-// AEドメインを生成する。R版のbuild_ae_domain.R/populate_ae_domain()に対応するが、
+// AEドメインを生成する。
 // 現時点ではUSUBJIDの採番(DMからの重複ありサンプリング)、alias_name割り当て、
 // radio_button/check_box型項目(required_vars/numeric_bounds含む)、date型項目、
 // meddra型項目+コーディングブロックの埋め込み、inject_required_llt_codes、

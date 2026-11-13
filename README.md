@@ -7,7 +7,7 @@ EDC仕様JSON(.json)から、統計解析プログラムの開発・検証用に
 - `FORGE ver1.4.html` — ダミーデータ生成ツールの起動ファイル(これをブラウザで開く)
 - `web_tool/` — 上記ツールの実装本体(js)
 - `dictionary_data/` — MedDRA/WHO Drugの辞書データ(変換済みJSファイル)の置き場
-- `r_version/` — 生成ロジックのR版実装 + 生成データの検証(バリデーション)スクリプト
+- `r_version/` — 生成データの検証(バリデーション)スクリプト(R)
 - `scripts/` — Web版の生成を自動化するスクリプト・回帰テスト(Playwright)
 
 各フォルダの詳細は「開発者向け」の「ディレクトリ構成」を参照。
@@ -67,21 +67,10 @@ dictionary_data/
 
 r_version/
 ├── constant.R                      # 定数(外部辞書のパス等)
-├── resolve_os_path.R               # 実行環境(Mac/Windows)に応じたパスの切り替え
-├── user_input.R                    # 登録予定被験者数・登録開始日
-├── load_edc_spec.R                 # EDC仕様JSONの読み込み〜各ドメイン生成までを一括実行
-├── generate_random_date.R          # 日付項目の乱数生成
-├── generate_brthdtc.R              # 年齢制約からBRTHDTC(生年月日)の許容範囲を算出
-├── build_domain_common.R           # ドメイン生成の共通処理
-├── build_dm_domain.R / build_ae_domain.R / build_ds_domain.R  # DM/AE/DSドメイン生成
-├── build_cdisc_variable_values.R   # cdisc_variable_values組み立て
-├── build_validator_table.R         # field_itemsのvalidatorsを縦持ちtibble化
-├── build_generation_constraints.R  # 生成制約テーブル一式の組み立て
-├── build_field_reference_table.R   # Reference型フィールドの参照関係テーブル
-├── build_meddra_soc_pt_llt.R       # MedDRA階層(SOC〜LLT)の結合
+├── resolve_os_path.R               # 実行環境(Mac/Windows)に応じたパスの切り替え・Box同期フォルダのルート
+├── user_input.R                    # WHO Drug/IDFの辞書バージョン等の設定
+├── build_cdisc_variable_values.R   # EDC仕様JSONからcdisc_variable_values(選択肢・field_type定義)を組み立て
 ├── read_who_drug_idf.R             # WHO Drug/IDFテーブルの読み込み・結合
-├── lb_reference_ranges.R / tr_orres_values.R / vs_orres_values.R / fa_orres_values.R
-│                                   # LB/TR/VS/FAのORRESを数値バリデーションに沿った値に置き換え
 └── tools/
     ├── validate_common.R           # バリデーション共通関数・run_full_validation
     ├── validate_dm.R / validate_ae.R / validate_ds.R / validate_other_domains.R

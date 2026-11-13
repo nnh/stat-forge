@@ -425,7 +425,7 @@ document.getElementById("generate-btn").addEventListener("click", async () => {
   // 稀に中止日がRFSTDTC(症例登録日)より前になる、という時系列上ありえない矛盾が生じることがある
   // (RFSTDTCを参照する他ドメイン(例: CEのCEDTC)で「中止日超過」として検出される)。
   // ここで、RFSTDTC(・その前提であるべきRFICDTC)が中止日を超えている被験者だけ、
-  // 中止日以前になるよう遡って補正する(Rのload_edc_spec.Rの同様の対応に対応)
+  // 中止日以前になるよう遡って補正する
   if (dm[0] && "RFSTDTC" in dm[0]) {
     const disconByUsubjid = {};
     discontinuationDate.forEach((r) => {
@@ -522,7 +522,7 @@ document.getElementById("generate-btn").addEventListener("click", async () => {
   renderOtherDomainPreviews(otherDomains);
 
   // alias_name/label/sheet_seqは他ドメイン生成時の突き合わせキーやDSSEQ並び替えに使うため
-  // ここまで保持していたが、最終出力には不要なので取り除く(Rのload_edc_spec.Rでの同様の処理に対応)
+  // ここまで保持していたが、最終出力には不要なので取り除く
   ds = ds.map((row) => {
     const { alias_name, label, sheet_seq, ...rest } = row;
     return rest;

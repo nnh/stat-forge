@@ -1,5 +1,5 @@
 // MedDRAバージョンフォルダ(.ascファイル群、$区切り・ヘッダー無し)をパースし、
-// r_version/build_meddra_soc_pt_llt.RのbuildMeddraHierarchy()と同じ結合結果
+// MedDRA階層(SOC〜LLT)を結合した結果
 // (llt_code, llt_name, pt_code, pt_name, hlt_code, hlt_name, hlgt_code, hlgt_name, soc_code, soc_name)
 // を持つ{columns, rows}形式のオブジェクトを作る。
 // 日本語名(_j.ascファイル)は最終出力列に使わないため読み込まない。

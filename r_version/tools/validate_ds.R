@@ -30,7 +30,7 @@ validate_ds <- function(ds, dm, cdisc_variable_values) {
 
   # DSTERM=="DEATH"が同一USUBJID×同一EPOCH内では高々1件(同じEPOCH内で死亡が重複しない)。
   # 異なるEPOCH(例: TREATMENT・FOLLOW-UP)にまたがって複数DEATH行を持つのは、
-  # finalize_ds_disposition()のearly_death_probによる正当なケースのため許容する
+  # finalizeDsDisposition()のearlyDeathProbによる正当なケースのため許容する
   if ("DSTERM" %in% colnames(ds)) {
     group_cols <- if ("EPOCH" %in% colnames(ds)) c("USUBJID", "EPOCH") else "USUBJID"
     death_counts <- ds %>% filter(DSTERM == "DEATH") %>% count(across(all_of(group_cols)))
@@ -38,7 +38,7 @@ validate_ds <- function(ds, dm, cdisc_variable_values) {
     add_check("death_not_duplicated", length(dup_death) == 0, str_c("重複: ", paste(dup_death, collapse = ", ")))
   }
 
-  # add_randomization_ds_rows(): 割り付け(ARM)がある被験者には"RANDOMIZED"のマイルストーン行が
+  # addRandomizationDsRows(): 割り付け(ARM)がある被験者には"RANDOMIZED"のマイルストーン行が
   # 過不足なく追加されているか(ARMありなら必ず追加され、ARM無しには追加されない)を確認する。
   # dmにARM列自体が無い場合はスキップする
   if ("DSTERM" %in% colnames(ds) && "ARM" %in% colnames(dm)) {
@@ -66,7 +66,7 @@ validate_ds <- function(ds, dm, cdisc_variable_values) {
     )
   }
 
-  # add_randomization_ds_rows()がEDC仕様のコードリストとは無関係に固定挿入する
+  # addRandomizationDsRows()がEDC仕様のコードリストとは無関係に固定挿入する
   # 無作為化マイルストーン行の値(EDCフォーム上には存在しない標準SDTM値)。valid_codesチェックの
   # 誤検知を避けるため、該当するcdisc_variableの許容値にあらかじめ加えておく
   randomization_allowed_codes <- list(DSCAT = "PROTOCOL MILESTONE", DSTERM = "RANDOMIZED", DSDECOD = "RANDOMIZED")
@@ -106,7 +106,7 @@ validate_ds <- function(ds, dm, cdisc_variable_values) {
   # date型の列は、日付(YYYY-MM-DD)としてパースでき、未来日でない。
   # as.Date()は完全に書式が崩れた文字列(数値がそのまま文字列化されてしまった等)だとエラーで
   # 停止してしまうため、パースできない値はNAを返すlubridate::ymd()を使う
-  # DSSTDTC等は、add_randomization_ds_rows()が追加するRANDOMIZED行のように正当に空欄になる行が
+  # DSSTDTC等は、addRandomizationDsRows()が追加するRANDOMIZED行のように正当に空欄になる行が
   # あり得る。R版(in-memory)では未設定列はNAだが、Web版はCSV経由(na=character(0)で読み込むため
   # 空文字列"")なので、NAと空文字列の両方を「値なし」として除外してからパースする。
   # raw自体はR版だとDate型のことがあり、Date型のまま""と比較するとas.Date("")のパース失敗で

@@ -1,4 +1,4 @@
-// DSドメインを生成する。R版のbuild_ds_domain.R/build_ds_domain()・populate_ds_domain()に対応するが、
+// DSドメインを生成する。
 // 現時点ではUSUBJID/STUDYID/DOMAINの採番、DSEPOCHがある場合のEPOCH/DSSPID展開(シート表示順に積み上げ)、
 // radio_button/date型項目(alias_nameスコープ含む)、DUMMYフォールバック、DSSEQ、meddra型項目、
 // presence_conditionsによるゲーティング、field_ref_bounds、列順整理まで対応する。

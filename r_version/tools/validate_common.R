@@ -9,9 +9,20 @@ source(here("tools/validate_dm.R"))
 source(here("tools/validate_ds.R"))
 source(here("tools/validate_ae.R"))
 source(here("tools/validate_other_domains.R"))
-# run_full_validation()・testN.Rがbuild_discontinuation_date_table()を使うため。testN.R側のrm()で
-# データ以外の全オブジェクトと一緒に消えてしまうため、ここで明示的にsourceし直しておく
-source(here("build_ds_domain.R"))
+# USUBJIDごとの中止日テーブルを作る(DSTERM!="COMPLETED"のレコード。DEATHも含む)。
+# RANDOMIZED(Web版ds_domain.jsのaddRandomizationDsRows()が追加する無作為化マイルストーン行)も、
+# 中止理由ではなく通常は治療開始前の早い日付のため除外する(無作為化日が誤って中止日として扱われないようにするため)。
+# 他ドメイン(EX/LBなど)で中止日以降のレコードが発生していないかのチェックに使う
+build_discontinuation_date_table <- function(ds) {
+  if (!all(c("DSTERM", "DSDTC") %in% colnames(ds))) {
+    return(tibble(USUBJID = character(), DISCONDTC = as.Date(character())))
+  }
+
+  ds %>%
+    filter(!(DSTERM %in% c("COMPLETED", "RANDOMIZED"))) %>%
+    group_by(USUBJID) %>%
+    summarise(DISCONDTC = min(DSDTC), .groups = "drop")
+}
 
 # json_path(のファイル名)ごとに、対応する実データ(rawdata)フォルダのパスをべた書きで設定する。
 # test1・test2は実データが用意できているのでパスを指定し、test3・test4はまだ実データが無いので

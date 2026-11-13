@@ -158,7 +158,7 @@ str_c(target_cm_cols, suffix) %>%
 # 絞り込んで行う。maint2(4visit)/maint3(4visit)は、それに輸血2種(PLATELETS/RED BLOOD CELLS)を
 # 加えた13項目パネルになる。Miconazole(WHO Drugコード6290400)は、full_name_enが辞書上未登録で
 # generic_name_enへのフォールバックが無いと生成時にランダムな薬剤名になる不具合があったため、
-# other_domains.js/build_domain_common.Rの修正後に追加された項目
+# other_domains.jsの修正後に追加された項目
 cm_antifungal_panel <- c(
   "VORICONAZOLE", "MICAFUNGIN NA", "CASPOFUNGIN ACETATE", "POSACONAZOLE",
   "ISAVUCONAZONIUM SULFATE", "FLUCONAZOLE", "ITRACONAZOLE", "FOSFLUCONAZOLE",

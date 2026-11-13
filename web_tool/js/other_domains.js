@@ -1,5 +1,4 @@
-// DM/AE/DS以外のドメイン(CM/MH/EG等)を生成する。R版のbuild_domain_common.Rの
-// build_other_domains()/build_generic_domain()/build_repeated_domain()に対応する。
+// DM/AE/DS以外のドメイン(CM/MH/EG等)を生成する。
 // 依存関係解決の基盤(トポロジカルソート)、build_generic_domain(個別ロジックを持たないドメイン向け)、
 // build_repeated_domain(TR/LB等、同一alias_name内で複数labelを持つ繰り返しドメイン向け)、
 // inject_cross_domain_refs(ドメインをまたぐpresence_conditions/age_bounds解決)、

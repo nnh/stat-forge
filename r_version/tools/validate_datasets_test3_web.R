@@ -788,7 +788,7 @@ check_reinduction2_ec_drug("L-ASPARAGINASE", "_4")
 
 # reinduction2のMETHOTREXATE/CYTARABINE/PREDNISOLONE SODIUM SUCCINATE(髄注、label=089)。ECADJは
 # 他の薬剤と同様ゲーティング無しで常に値を持つが(validate_formula_ifはゲーティング条件として使わない
-# よう修正済み。詳細はbuild_generation_constraints.Rの変更履歴を参照)、コード体系が他のECADJ_5と異なり
+# よう修正済み)、コード体系が他のECADJ_5と異なり
 # 通常の6コードに加えて"Not Administration with CNS-1"を含む7コード体系のため、新しいsuffix "_9"を使う
 tmp_ec <- ec %>% filter(ECTRT == "METHOTREXATE/CYTARABINE/PREDNISOLONE SODIUM SUCCINATE" & VISITNUM == 2000)
 c("ECOCCUR", "ECADJ") %>% check_required_vars(tmp_ec, ., domain_name ="EC")
@@ -1629,7 +1629,7 @@ str_c(sv_target_cols, suffix) %>% walk(~ run_value_equals_checks_from_csv(tmp_sv
 # sheet_groups(TP2-Returned)によりpcrmrdtp2シートが有効化されるため、全員が実際にpcrmrdtp2の
 # LBレコードを持つはずである。allocation1の割り付けコード自体はCDISC変数にマッピングされていない
 # (allocation1の実体フィールドはNote/Headingのみ)が、defaultグループに属する唯一の割り付けシートの
-# ためDM.ARMにそのままコードが記録される(build_dm_domain.Rのbuild_subject_active_sheets参照)。
+# ためDM.ARMにそのままコードが記録される(web_tool/js/dm_domain.jsのbuildSubjectActiveSheets参照)。
 # 逆方向(Y以外の被験者にpcrmrdtp2レコードが無いこと)は確認しない。TP2結果が未返却(L/S/I/H)の
 # 被験者も、allocation10(暫定リスク後のTP2結果再確認シート)で改めて"A"(結果あり)を選ぶと
 # 同じくpcrmrdtp2が有効化されるため、Y以外でも正当にpcrmrdtp2を持ちうる

@@ -1,9 +1,7 @@
 // EDC仕様のvalidate_presence_if等(field_itemsのvalidators)から、presence_conditions等の
 // 生成制約テーブル一式を組み立て、ドメインデータに適用する。
-// R版のbuild_validator_table.R/build_generation_constraints.R/build_domain_common.Rの
-// apply_presence_conditions()・apply_age_date_bounds()に対応する
 
-// --- build_validator_table.R相当 ---
+// --- validator_table ---
 
 // sheetsのfield_items.validatorsを(alias_name, field_name, validator_type, validator_key, value)の
 // 縦持り配列にする(Rのbuild_validator_table_raw()に対応)
@@ -422,7 +420,7 @@ function buildFieldReferenceTable(sheets) {
   return rows;
 }
 
-// --- build_generation_constraints.R相当 ---
+// --- 生成制約テーブル ---
 
 // dfCdisc((alias_name, field, cdisc_variable, label, prefix, field_type)を含む行の配列。
 // cdisc_variable_values.jsのbuildDfCdisc()が返す形)から、(alias_name, field) -> 候補一覧の索引を作る。
@@ -778,7 +776,6 @@ function buildFieldReferenceCopyConditions(fieldReferenceTable, fieldLookup) {
 // 同じcdisc_variable名が複数のalias_name/labelに定義されている場合(例: MHTERMが"主診断"(必須)と
 // "再発診断"(非必須、複数label)の両方に使われる)があるため、cdisc_variable名だけでなく
 // alias_name・label単位で必須かどうかを判定できるようにする
-// (Rのbuild_generation_constraints.Rのrequired_var_instancesに対応)
 function buildRequiredVarInstances(validatorTable, fieldLookup) {
   const seenField = new Set();
   const seenInstance = new Set();
@@ -908,7 +905,6 @@ function buildFieldRefBounds(validatorTable, fieldLookup) {
 // 「次のlabelの開始日>=前のlabelの終了日」のようにlabelを跨ぐ参照と跨がない参照が混在する。cdisc_variable単位
 // まで潰してしまうと(ECSTDTC min_date ECENDTC / ECENDTC min_date ECSTDTCのように)矛盾した規則に見えてしまう
 // ため、buildRepeatedDomain側でlabel/ref_labelを見てlabelを跨ぐ参照かどうかを判定できるようにする
-// (R版build_generation_constraints.Rのdate_ref_boundsと同じ理由)
 function buildDateRefBounds(validatorTable, fieldLookup) {
   const rows = [];
   const seen = new Set();
@@ -988,7 +984,6 @@ function buildAgeBounds(validatorTable, fieldLookup) {
 // requiredVars(cdisc_variable名だけでunique化したフラット版)と違い、同じcdisc_variable名が
 // 複数のalias_name/labelに定義されていても、インスタンスごとに正確に必須/非必須を判定できる。
 // labelがnull(そのfieldにlabelが無い)の行同士も一致させるため、joinキーは空文字列に揃える
-// (Rのload_edc_spec.Rのcdisc_variable_values %>% left_join(...)に対応)
 function attachIsRequired(cdiscVariableValues, requiredVarInstances) {
   const requiredSet = new Set(requiredVarInstances.map((r) => `${r.alias_name}|${r.label != null ? r.label : ""}|${r.cdisc_variable}`));
   cdiscVariableValues.forEach((row) => {

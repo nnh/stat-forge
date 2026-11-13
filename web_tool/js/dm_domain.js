@@ -1,4 +1,4 @@
-// DMドメインを生成する。R版のbuild_dm_domain.R/populate_dm_domain()に対応するが、
+// DMドメインを生成する。
 // 現時点ではUSUBJID/STUDYID/SUBJIDの採番、SITEID、BRTHDTC、ARM算出(割り付けグラフ)、
 // radio_button型・check_box型・date型項目の埋め込み、それ以外のDUMMYフォールバックまで対応する。
 // meddra/drug型項目(外部辞書が必要)、presence_conditionsによるゲーティングはまだ未移植
@@ -114,7 +114,7 @@ function computeBirthAgeRange(ageBounds) {
   };
 }
 
-// BRTHDTC(生年月日)を生成する。R版のgenerate_brthdtc.Rに対応する。
+// BRTHDTC(生年月日)を生成する。
 // minAge〜maxAge歳の範囲で一様ランダムに年齢(日単位)を選び、refDateから引いて生年月日にする
 // (minAge/maxAge/maxAgeMarginは通常computeBirthAgeRange()で試験のageBoundsから求めた値を渡す)
 function generateBrthdtc(n, refDate, minAge = 0, maxAge = 89, maxAgeMargin = 1) {
