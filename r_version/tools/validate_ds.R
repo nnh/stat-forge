@@ -1,7 +1,7 @@
 library(tidyverse)
 library(lubridate)
 
-# 先にload_edc_spec.Rを実行してds/dm/cdisc_variable_valuesを作成しておくこと。
+# 呼び出し元でds/dm/cdisc_variable_valuesを用意しておくこと。
 # 乱数で値が変わるDSドメインを、値そのものではなく「満たすべき構造的な条件」で自動チェックする
 # (USUBJIDのカバレッジ・DEATHの重複無し・コードリスト範囲内・日付の妥当性など)。
 # 目視確認と異なり、今後の修正で出方がおかしくなっていないかをそのまま再実行して確認できる

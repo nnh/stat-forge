@@ -1,7 +1,7 @@
 library(tidyverse)
 library(lubridate)
 
-# 先にload_edc_spec.Rを実行してother_domains/dm/cdisc_variable_valuesを作成しておくこと。
+# 呼び出し元でother_domains/dm/cdisc_variable_valuesを用意しておくこと。
 # DM/DS/AEで個別に書いていた「コードリスト範囲内・日付の妥当性」等の汎用チェックを、
 # prefixを問わず適用できるようにしたもの。other_domainsの全ドメインに一括で適用する
 

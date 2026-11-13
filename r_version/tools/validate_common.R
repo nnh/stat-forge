@@ -9,9 +9,8 @@ source(here("tools/validate_dm.R"))
 source(here("tools/validate_ds.R"))
 source(here("tools/validate_ae.R"))
 source(here("tools/validate_other_domains.R"))
-# run_full_validation()がbuild_discontinuation_date_table()を使うため。testN.R側のrm()で
-# 消えている可能性がある(load_edc_spec.R実行時に一度定義されても、testN.R先頭のrm()で
-# データ以外の全オブジェクトと一緒に消えてしまうため)、ここで明示的にsourceし直しておく
+# run_full_validation()・testN.Rがbuild_discontinuation_date_table()を使うため。testN.R側のrm()で
+# データ以外の全オブジェクトと一緒に消えてしまうため、ここで明示的にsourceし直しておく
 source(here("build_ds_domain.R"))
 
 # json_path(のファイル名)ごとに、対応する実データ(rawdata)フォルダのパスをべた書きで設定する。
@@ -39,7 +38,7 @@ load_csv_datasets <- function(csv_dir) {
     map(~ read_csv(.x, col_types = cols(.default = "c"), na = character(0)))
 }
 
-# load_edc_spec.Rで生成したae/dm/ds/other_domainsを、CSV側(datasets)と同じ
+# 生成データ(Web版CSVから読み込んだae/dm/ds/other_domains)を、CSV側(datasets)と同じ
 # ドメイン名(AE/DM/DS/FA等)をキーにした1つのnamed listにまとめる
 build_generated_datasets <- function(ae, dm, ds, other_domains) {
   c(list(AE = ae, DM = dm, DS = ds), other_domains)
@@ -474,7 +473,7 @@ run_value_equals_checks_from_csv <- function(data, domain, var, csv_path, visit 
   }
 }
 
-# load_edc_spec.Rで生成したae/dm/ds/other_domainsと、csv_dir直下のCSVを一括で比較・検証する。
+# 生成データ(Web版CSVから読み込んだae/dm/ds/other_domains)と、csv_dir直下のCSVを一括で比較・検証する。
 # データセットの過不足確認、列名diff、DM/DS/AE/other_domainsの構造的な自動チェック、AE/DSの死亡情報の
 # 整合性チェックまでをまとめて実行する。testN.R側は csv_dir と other_domains_special_checks
 # (この試験固有の追加チェック)を用意してこの関数を呼ぶだけでよい。
@@ -483,11 +482,8 @@ run_value_equals_checks_from_csv <- function(data, domain, var, csv_path, visit 
 # (データセットの過不足・列名diff)をスキップし、生成データ自体の構造チェック(DM/DS/AE/
 # other_domainsの自動チェック・AE/DSの死亡情報整合性)だけを実行できる。無関係な実データ
 # (別試験のrawdata等)と比較して構造差分を誤検知するより、比較自体を行わない方が安全なため
-# discontinuation_dateもNULL可。渡さなければこの関数の中でds(引数)から作り直すが、
-# load_edc_spec.Rはadd_randomization_ds_rows()でRANDOMIZED行を追加した後のdsをこの関数に渡すため、
-# ここで作り直すとRANDOMIZED行(DSTERM!="COMPLETED"だが中止ではない)が混ざり、中止日が実際より
-# 早い誤った日付になってしまう。testN.R側でload_edc_spec.R実行時にできる、RANDOMIZED行を混ぜる前の
-# 正しいdiscontinuation_date(グローバル環境にコピーされている)を明示的に渡すこと
+# discontinuation_dateもNULL可。渡さなければこの関数の中でds(引数)から作り直す。
+# testN.R側では、Web版CSVのdsからbuild_discontinuation_date_table()で作ったものを明示的に渡している
 # other_domains_special_checksの各チェック関数がwho_drug_idf等の他の変数を参照したい場合は、
 # この関数の引数としてではなく、testN.R側のトップレベル変数をクロージャとして直接参照すればよい
 # (special_checksの関数はtestN.R側で定義されるため、testN.R側の変数がそのまま見える)。
@@ -512,8 +508,8 @@ run_full_validation <- function(ae, dm, ds, other_domains, cdisc_variable_values
   report_ae_validation(ae_result)
   if (is.null(discontinuation_date)) {
     cat("discontinuation_date未指定のため、この時点のds(RANDOMIZED行を含む)から作り直します。\n")
-    cat("RANDOMIZED行が誤って中止日として扱われる可能性があるため、可能ならload_edc_spec.R実行時の\n")
-    cat("discontinuation_dateを明示的に渡すことを推奨します\n")
+    cat("RANDOMIZED行が誤って中止日として扱われる可能性があるため、可能ならdiscontinuation_dateを\n")
+    cat("明示的に渡すことを推奨します\n")
     discontinuation_date <- build_discontinuation_date_table(ds)
   }
   other_domains_result <- validate_other_domains(other_domains, dm, cdisc_variable_values, other_domains_special_checks, discontinuation_date)

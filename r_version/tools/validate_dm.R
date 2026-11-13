@@ -1,7 +1,7 @@
 library(tidyverse)
 library(lubridate)
 
-# 先にload_edc_spec.Rを実行してdm/cdisc_variable_values/registration_nを作成しておくこと。
+# 呼び出し元でdm/cdisc_variable_values/registration_nを用意しておくこと。
 # 乱数で値が変わるDMドメインを、値そのものではなく「満たすべき構造的な条件」で自動チェックする
 # (行数・USUBJIDの一意性・コードリスト範囲内・日付の妥当性など)。
 # 目視確認と異なり、今後の修正で出方がおかしくなっていないかをそのまま再実行して確認できる
