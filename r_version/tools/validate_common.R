@@ -18,14 +18,8 @@ source(here("build_ds_domain.R"))
 # test1・test2は実データが用意できているのでパスを指定し、test3・test4はまだ実データが無いので
 # NULLにしておく(run_full_validation()はcsv_dir=NULLだと実データとの比較をスキップする)
 csv_dir_by_file <- list(
-  "fortest1_260826_1112.json" = resolve_os_path(
-    "/Users/mariko/Library/CloudStorage/Box-Box/Datacenter/Users/ohtsuka/2026/stat-forge-test/test1/rawdata",
-    "C:\\Users\\c0002691\\Box\\Datacenter\\Users\\ohtsuka\\2026\\stat-forge-test\\test1\\rawdata"
-  ),
-  "fortest2_260826_1501.json" = resolve_os_path(
-    "/Users/mariko/Library/CloudStorage/Box-Box/Datacenter/Users/ohtsuka/2026/stat-forge-test/test2/rawdata",
-    "C:\\Users\\c0002691\\Box\\Datacenter\\Users\\ohtsuka\\2026\\stat-forge-test\\test2\\rawdata"
-  ),
+  "fortest1_260826_1112.json" = file.path(box_root, "Datacenter/Users/ohtsuka/2026/stat-forge-test/test1/rawdata"),
+  "fortest2_260826_1501.json" = file.path(box_root, "Datacenter/Users/ohtsuka/2026/stat-forge-test/test2/rawdata"),
   "fortest3_260826_1452.json" = NULL,
   "fortest4_260826_1501.json" = NULL
 )

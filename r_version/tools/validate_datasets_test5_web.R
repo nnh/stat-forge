@@ -3,21 +3,19 @@ rm(list = ls())
 source(here("resolve_os_path.R"))
 
 # check_value_equals(固定値チェック)用のCSV設定ファイルのパス。内容(チェックしたい固定値)は
-# 試験ごとに異なるため、test_config.R(共通)ではなくここで指定する。リポジトリ外の任意の場所でよい
+# 試験ごとに異なるため、ここで指定する。リポジトリ外の任意の場所でよい
 # TODO: test5のfixed_value_checks_test5.csvの実際のパスに置き換える
-fixed_value_checks_csv_path <- resolve_os_path(
-  "/Users/mariko/Library/CloudStorage/Box-Box/Datacenter/Users/ohtsuka/2026/stat-forge-test/test5/fixed_value_checks_test5.csv",
-  "C:\\Users\\c0002691\\Box\\Datacenter\\Users\\ohtsuka\\2026\\stat-forge-test\\test5\\fixed_value_checks_test5.csv"
-)
+fixed_value_checks_csv_path <- file.path(box_root, "Datacenter/Users/ohtsuka/2026/stat-forge-test/test5/fixed_value_checks_test5.csv")
 
-source(here("test_config.R"))
-# test_config.Rはjson_path(他テストとの切り替え用)も定義するが、このファイルは上で固定した
-# json_pathを優先して使うため、test_config.R側の値で上書きしないよう再度設定し直す
+# Webツールの「ZIPで一括ダウンロード」(dummy_data.zip)を、ダウンロードフォルダに展開したフォルダ
+other_domains_web_csv_dir <- fs::path_home("Downloads", "dummy_data")
+dm_web_csv_path <- file.path(other_domains_web_csv_dir, "DM_dummy.csv")
+ae_web_csv_path <- file.path(other_domains_web_csv_dir, "AE_dummy.csv")
+ds_web_csv_path <- file.path(other_domains_web_csv_dir, "DS_dummy.csv")
+
+# このファイル固定のjson_path
 # TODO: test5のJSONファイルの実際のパスに置き換える
-json_path <- resolve_os_path(
-  "/Users/mariko/Library/CloudStorage/Box-Box/Datacenter/Users/ohtsuka/2026/stat-forge-test/test5/json/fortest5_260728_1634.json",
-  "C:\\Users\\c0002691\\Box\\Datacenter\\Users\\ohtsuka\\2026\\stat-forge-test\\test5\\json\\fortest5_260728_1634.json"
-)
+json_path <- file.path(box_root, "Datacenter/Users/ohtsuka/2026/stat-forge-test/test5/json/fortest5_260728_1634.json")
 source(here("tools/validate_common.R"))
 
 # cdisc_variable_values・registration_n・who_drug_idfはEDC仕様(JSON)/辞書由来で被験者データには

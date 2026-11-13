@@ -3,34 +3,23 @@ library(here)
 # check_cm_cmtrt/check_tr_tu_dtc等の特別チェック・run_full_validationの呼び出しを含め、
 # 比較元(生成データ)にWebツールが生成したCSV(dummy_data.zip展開後)を使う。
 #
-# 事前準備: dm_web_csv_path・ae_web_csv_path・ds_web_csv_path・other_domains_web_csv_dir
-# (test_config.R)を、Webツールでfortest1用JSONを読み込んで生成し「ZIPで一括ダウンロード」した
-# dummy_data.zipの展開先に設定しておくこと。json_pathは下記でfortest1用に固定しているため、
-# test_config.R側の値(他テストと切り替えて使われる)を書き換える必要はない
+# 事前準備: Webツールでfortest1用JSONを読み込んで生成し「ZIPで一括ダウンロード」した
+# dummy_data.zipを、ダウンロードフォルダのdummy_dataに展開しておくこと
 rm(list = ls())
 source(here("resolve_os_path.R"))
 
-# このファイル固定のjson_path。test_config.R側のjson_pathは他テストとの切り替えで
-# 意図せず別のJSONを指したままになりうる(実際に誤検知の原因になったため)、ここで固定する
-json_path <- resolve_os_path(
-  "/Users/mariko/Library/CloudStorage/Box-Box/Datacenter/Users/ohtsuka/2026/stat-forge-test/test1/json/fortest1_260826_1112.json",
-  "C:\\Users\\c0002691\\Box\\Datacenter\\Users\\ohtsuka\\2026\\stat-forge-test\\test1\\json\\fortest1_260826_1112.json"
-)
+# このファイル固定のjson_path
+json_path <- file.path(box_root, "Datacenter/Users/ohtsuka/2026/stat-forge-test/test1/json/fortest1_260826_1112.json")
 
 # check_value_equals(固定値チェック)用のCSV設定ファイルのパス。内容(チェックしたい固定値)は
-# 試験ごとに異なるため、test_config.R(共通)ではなくここで指定する。リポジトリ外の任意の場所でよい
-fixed_value_checks_csv_path <- resolve_os_path(
-  "/Users/mariko/Library/CloudStorage/Box-Box/Datacenter/Users/ohtsuka/2026/stat-forge-test/test1/fixed_value_checks_test1.csv",
-  "C:\\Users\\c0002691\\Box\\Datacenter\\Users\\ohtsuka\\2026\\stat-forge-test\\test1\\fixed_value_checks_test1.csv"
-)
+# 試験ごとに異なるため、ここで指定する。リポジトリ外の任意の場所でよい
+fixed_value_checks_csv_path <- file.path(box_root, "Datacenter/Users/ohtsuka/2026/stat-forge-test/test1/fixed_value_checks_test1.csv")
 
-source(here("test_config.R"))
-# test_config.Rはjson_path(他テストとの切り替え用)も定義するが、このファイルは上で固定した
-# json_pathを優先して使うため、test_config.R側の値で上書きしないよう再度設定し直す
-json_path <- resolve_os_path(
-  "/Users/mariko/Library/CloudStorage/Box-Box/Datacenter/Users/ohtsuka/2026/stat-forge-test/test1/json/fortest1_260826_1112.json",
-  "C:\\Users\\c0002691\\Box\\Datacenter\\Users\\ohtsuka\\2026\\stat-forge-test\\test1\\json\\fortest1_260826_1112.json"
-)
+# Webツールの「ZIPで一括ダウンロード」(dummy_data.zip)を、ダウンロードフォルダに展開したフォルダ
+other_domains_web_csv_dir <- fs::path_home("Downloads", "dummy_data")
+dm_web_csv_path <- file.path(other_domains_web_csv_dir, "DM_dummy.csv")
+ae_web_csv_path <- file.path(other_domains_web_csv_dir, "AE_dummy.csv")
+ds_web_csv_path <- file.path(other_domains_web_csv_dir, "DS_dummy.csv")
 source(here("tools/validate_common.R"))
 
 # cdisc_variable_values・registration_nはEDC仕様(JSON)由来で被験者データには依存しないため、

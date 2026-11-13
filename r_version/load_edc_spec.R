@@ -21,10 +21,10 @@ source(here("fa_orres_values.R"))
 source(here("read_who_drug_idf.R"))
 
 # json_path(EDC仕様JSON)からDM/AE/DS/その他ドメインのダミーデータ一式を生成する。
-# テスト・バリデーション専用(json_pathはtest_config.Rで管理する)。生成過程の全ての中間オブジェクト
+# テスト・バリデーション専用(json_pathは呼び出し元の検証スクリプトで指定する)。生成過程の全ての中間オブジェクト
 # (edc_spec, sheets, cdisc_variable_values, presence_conditions, dm, ae, ds, other_domains等)を
 # 呼び出し元のグローバル環境に代入するため、呼んだ後はそれらをそのまま参照できる
-# (例: source(here("test_config.R")); source(here("load_edc_spec.R")); load_edc_spec(json_path))
+# (例: source(here("load_edc_spec.R")); load_edc_spec(json_path))
 load_edc_spec <- function(json_path) {
   if (!is.null(random_seed)) set.seed(random_seed)
   edc_spec <- jsonlite::read_json(json_path)

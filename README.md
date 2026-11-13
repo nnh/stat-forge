@@ -82,7 +82,6 @@ r_version/
 ├── read_who_drug_idf.R             # WHO Drug/IDFテーブルの読み込み・結合
 ├── lb_reference_ranges.R / tr_orres_values.R / vs_orres_values.R / fa_orres_values.R
 │                                   # LB/TR/VS/FAのORRESを数値バリデーションに沿った値に置き換え
-├── test_config.R.sample            # test_config.Rのひな形(要コピー、詳細は後述「Rでのテスト」参照)
 └── tools/
     ├── validate_common.R           # バリデーション共通関数・run_full_validation
     ├── validate_dm.R / validate_ae.R / validate_ds.R / validate_other_domains.R
@@ -122,10 +121,10 @@ package.json                        # scripts/の依存パッケージ(Playwrigh
 
 ##### セットアップ
 
-1. `r_version/test_config.R.sample` を `r_version/test_config.R` としてコピー(gitignore対象、各自のローカルパスを書く)
-2. `json_path`(EDC仕様JSON)・`other_domains_web_csv_dir`(Webツールの「ZIPで一括ダウンロード」展開先)を自分の環境のパスに書き換える
-3. 上記ファイルそれぞれの冒頭にある `json_path` / `fixed_value_checks_csv_path` も、テストごとに固定値なので必要に応じて書き換える
-4. 対象ファイルを先頭から実行する
+1. Webツールの「ZIPで一括ダウンロード」で得た `dummy_data.zip` を、ダウンロードフォルダの `dummy_data` に展開する
+   (検証スクリプトは `fs::path_home("Downloads", "dummy_data")` から読み込む)
+2. 上記ファイルそれぞれの冒頭にある `json_path` / `fixed_value_checks_csv_path` は、テストごとに固定値なので必要に応じて書き換える
+3. 対象ファイルを先頭から実行する
 
 #### Web版生成の自動化(Playwright)
 
@@ -145,7 +144,7 @@ npx playwright install chromium
 node scripts/generate_dummy_data.js <jsonPath> <outputDir>
 ```
 
-`outputDir` に `r_version/test_config.R` の `other_domains_web_csv_dir` と同じフォルダを指定すれば、
+`outputDir` にダウンロードフォルダの `dummy_data`(例: `~/Downloads/dummy_data`)を指定すれば、
 そのままRの検証スクリプト(前述「Rでのテスト」)から読み込める。
 
 実行内容(各ステップの確認結果・展開したファイル一覧と行数)は

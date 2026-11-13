@@ -3,3 +3,10 @@
 resolve_os_path <- function(mac_path, windows_path) {
   if (.Platform$OS.type == "windows") windows_path else mac_path
 }
+
+# Box同期フォルダのルート。ユーザーのホームフォルダはfs::path_home()で取得し、
+# ホームより下の場所はMac/Windowsで異なるため切り替える
+box_root <- resolve_os_path(
+  fs::path_home("Library", "CloudStorage", "Box-Box"),
+  fs::path_home("Box")
+)

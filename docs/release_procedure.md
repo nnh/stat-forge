@@ -67,7 +67,6 @@ test1〜test6を順に、1テストずつ以下を行う。
    - 出たワーニングの内容に問題がないこと
 
 - 日付は「今日」基準で生成されるため、6テストとも同じ日に行う
-- `r_version/test_config.R` の `other_domains_web_csv_dir` がダウンロードフォルダ内の `dummy_data` を指していること
 
 ## 4. タグ付け
 

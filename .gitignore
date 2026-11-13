@@ -152,7 +152,7 @@ dictionary_data/who_drug/*
 !dictionary_data/meddra/.gitkeep
 !dictionary_data/who_drug/.gitkeep
 
-# 個人のローカルパスを書くテスト設定ファイル(test_config.R.sampleをコピーして使う)
+# 旧テスト設定ファイル(現在は不使用。各自のローカルに残っている場合の誤コミット防止)
 r_version/test_config.R
 .Rproj.user
 
